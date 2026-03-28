@@ -1,17 +1,6 @@
 from pydantic import BaseModel
 
-
-class CrisisProfile(BaseModel):
-    """Extracted from SCOPE conversation. Input to ASSESS."""
-
-    crisis_type: str  # e.g., "supply_disruption", "demand_surge", "infrastructure"
-    affected_area: str  # e.g., "Greater Philadelphia"
-    food_categories: list[str]  # subset of: protein, grains, dairy, produce, canned, beverages
-    urgency: str  # "critical", "high", "moderate", "low"
-    population_affected: int
-    timeline_days: int  # planning horizon in days
-    demand_delta_pct: float  # estimated demand increase (e.g., 30.0 = +30%)
-    description: str  # original crisis description
+from models.crisis import CrisisProfile
 
 
 class CategoryGap(BaseModel):
