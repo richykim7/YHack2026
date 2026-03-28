@@ -1,8 +1,8 @@
 """SCOPE agent -- crisis intake specialist with multi-turn conversation.
 
-Implements multi-turn crisis intake with ChatAnthropic tool calling.
+Implements multi-turn crisis intake with ChatOpenAI (Gemini) tool calling.
 Extracts CrisisProfile when sufficient information is gathered.
-Routes LLM calls through configurable Lava/OpenRouter/direct gateway.
+Routes LLM calls through configurable Lava/direct gateway via ChatOpenAI.
 """
 
 import logging
@@ -65,7 +65,7 @@ async def run_scope_turn(session_id: str, user_message: str) -> dict:
 
     1. Ensures session exists in Supabase
     2. Loads conversation history
-    3. Invokes ChatAnthropic with tool binding
+    3. Invokes ChatOpenAI (Gemini) with tool binding
     4. Checks for extract_crisis_profile tool call
     5. Persists messages and extracted profile
 
