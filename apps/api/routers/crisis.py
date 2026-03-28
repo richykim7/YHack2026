@@ -36,7 +36,7 @@ async def stream_events(session_id: str):
                         "event": event["type"],
                         "data": json.dumps(event),
                     }
-                    if event["type"] in ("complete", "error"):
+                    if event["type"] in ("complete", "pipeline_complete", "error"):
                         break
                 except asyncio.TimeoutError:
                     # Send keepalive comment
