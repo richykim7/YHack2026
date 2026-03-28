@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { TabId } from '@/lib/types';
 import { DashboardHeader } from './DashboardHeader';
 import { TabNavigation } from './TabNavigation';
+import { DashboardTab } from '@/components/dashboard/DashboardTab';
 import { MapTab } from '@/components/map/MapTab';
 import { AssessmentTab } from '@/components/placeholders/AssessmentTab';
 import { PlansTab } from '@/components/placeholders/PlansTab';
@@ -17,9 +18,7 @@ export function DashboardShell() {
       <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
       <main className="flex-1 overflow-hidden">
         <div className={activeTab === 'dashboard' ? 'h-full' : 'hidden'}>
-          <div className="flex items-center justify-center h-full text-slate-500">
-            <p>Dashboard content — Plan 03</p>
-          </div>
+          <DashboardTab />
         </div>
         <div className={activeTab === 'map' ? 'h-full' : 'hidden'}>
           <MapTab />
