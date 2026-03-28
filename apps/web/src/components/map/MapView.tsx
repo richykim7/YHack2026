@@ -129,7 +129,6 @@ export function MapView({ sites, onSiteClick, onBackgroundClick }: MapViewProps)
       map.current?.remove();
       map.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Sync sites data when it changes
@@ -140,6 +139,18 @@ export function MapView({ sites, onSiteClick, onBackgroundClick }: MapViewProps)
       source.setData(sitesToGeoJSON(sites));
     }
   }, [sites]);
+
+  // Resize map when container becomes visible (preserve-mount pattern)
+  // ResizeObserver fires when element goes from display:none (0x0) to visible,
+  // handling both tab switching and window resizing.
+  useEffect(() => {
+    if (!mapContainer.current) return;
+    const observer = new ResizeObserver(() => {
+      map.current?.resize();
+    });
+    observer.observe(mapContainer.current);
+    return () => observer.disconnect();
+  }, []);
 
   return <div ref={mapContainer} className="w-full h-full" />;
 }
