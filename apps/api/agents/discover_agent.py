@@ -84,6 +84,8 @@ def _query_supplier_catalog(
 ) -> list[SourceOption]:
     """Query Supabase supplier_catalog for sources matching deficit categories.
 
+    Joins with suppliers table to get supplier name, reliability, and lead time.
+
     Args:
         categories: Food categories with deficits.
         profile: Crisis profile (unused currently, available for future filtering).
@@ -97,12 +99,17 @@ def _query_supplier_catalog(
 
     try:
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+        # Query supplier_catalog with embedded supplier join via foreign key
+        # DB schema: supplier_catalog has supplier_id -> suppliers.id
+        # supplier_catalog columns: id, supplier_id, food_category, subcategory,
+        #   estimated_qty_available_lbs, price_per_lb, min_order_lbs, available_until
+        # suppliers columns: id, name, reliability_score, typical_lead_time_hours
         response = (
             supabase.table("supplier_catalog")
-            .select("*")
+            .select("*, suppliers(name, reliability_score, typical_lead_time_hours)")
             .in_("food_category", categories)
-            .order("reliability_score", desc=True)
-            .order("unit_cost_per_lb", desc=False)
+            .order("price_per_lb", desc=False)
             .execute()
         )
 
@@ -125,14 +132,24 @@ def _query_supplier_catalog(
 
 
 def _row_to_source_option(row: dict) -> SourceOption | None:
-    """Map a supplier_catalog DB row to a SourceOption.
+    """Map a supplier_catalog DB row (with joined supplier) to a SourceOption.
 
-    Generates a slug-based id from supplier_name + item_name.
-    Uses .get() with defaults for graceful handling of column mismatches.
+    DB schema mapping:
+        supplier_catalog.subcategory -> item_name
+        supplier_catalog.estimated_qty_available_lbs -> quantity_available_lbs
+        supplier_catalog.price_per_lb -> unit_cost_per_lb
+        suppliers.name -> supplier_name
+        suppliers.reliability_score -> reliability_score
+        suppliers.typical_lead_time_hours -> lead_time_days (converted)
     """
     try:
-        supplier_name = row.get("supplier_name", "Unknown")
-        item_name = row.get("item_name", "Unknown Item")
+        # Extract joined supplier data (Supabase nests it as a dict)
+        supplier_info = row.get("suppliers") or {}
+        supplier_name = supplier_info.get("name", "Unknown") if isinstance(supplier_info, dict) else "Unknown"
+        reliability = float(supplier_info.get("reliability_score", 0.5)) if isinstance(supplier_info, dict) else 0.5
+        lead_time_hours = int(supplier_info.get("typical_lead_time_hours", 48)) if isinstance(supplier_info, dict) else 48
+
+        item_name = row.get("subcategory", "Unknown Item")
         slug = f"{supplier_name}-{item_name}".lower().replace(" ", "-")
 
         return SourceOption(
@@ -141,11 +158,11 @@ def _row_to_source_option(row: dict) -> SourceOption | None:
             food_category=row.get("food_category", ""),
             item_name=item_name,
             quantity_available_lbs=float(
-                row.get("quantity_available_lbs", 0.0)
+                row.get("estimated_qty_available_lbs", 0.0)
             ),
-            unit_cost_per_lb=float(row.get("unit_cost_per_lb", 0.0)),
-            lead_time_days=int(row.get("lead_time_days", 7)),
-            reliability_score=float(row.get("reliability_score", 0.5)),
+            unit_cost_per_lb=float(row.get("price_per_lb", 0.0)),
+            lead_time_days=max(1, lead_time_hours // 24),
+            reliability_score=reliability,
             source_type="database",
             notes=row.get("notes", ""),
         )
