@@ -4,10 +4,15 @@ import { MessageCircle, Send } from 'lucide-react';
 import { useScopeChat } from '@/hooks/useScopeChat';
 import { CrisisProfileCard } from './CrisisProfileCard';
 
-export function ChatSidebar() {
-  const { messages, isLoading, sendMessage, sessionId } = useScopeChat();
+interface ChatSidebarProps {
+  onLaunchPipeline?: (sessionId: string, crisisProfile: Record<string, unknown>) => void;
+  pipelineStreaming?: boolean;
+}
+
+export function ChatSidebar({ onLaunchPipeline, pipelineStreaming }: ChatSidebarProps) {
+  const { messages, isLoading, crisisProfile, sendMessage, sessionId } = useScopeChat();
   const [input, setInput] = useState('');
-  const [launchedSessions, setLaunchedSessions] = useState<Set<string>>(new Set());
+  const [pipelineLaunched, setPipelineLaunched] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new messages
@@ -24,11 +29,12 @@ export function ChatSidebar() {
   }
 
   function handleLaunchPipeline() {
-    console.log('Launch pipeline', sessionId);
-    setLaunchedSessions(prev => new Set(prev).add(sessionId));
+    if (!crisisProfile || pipelineLaunched) return;
+    setPipelineLaunched(true);
+    onLaunchPipeline?.(sessionId, crisisProfile as unknown as Record<string, unknown>);
   }
 
-  const pipelineLaunched = launchedSessions.has(sessionId);
+  const isLaunched = pipelineLaunched || pipelineStreaming;
 
   return (
     <div className="flex flex-col h-full bg-slate-800 border-l border-slate-700 w-80">
@@ -66,7 +72,7 @@ export function ChatSidebar() {
                 <CrisisProfileCard
                   profile={msg.crisisProfile}
                   onLaunchPipeline={handleLaunchPipeline}
-                  pipelineLaunched={pipelineLaunched}
+                  pipelineLaunched={!!isLaunched}
                 />
               )}
             </div>

@@ -5,7 +5,12 @@ import { ChatSidebar } from './ChatSidebar';
 import { useSites } from '@/hooks/useSites';
 import type { Site } from '@/lib/types';
 
-export function DashboardTab() {
+interface DashboardTabProps {
+  onLaunchPipeline?: (sessionId: string, crisisProfile: Record<string, unknown>) => void;
+  isStreaming?: boolean;
+}
+
+export function DashboardTab({ onLaunchPipeline, isStreaming }: DashboardTabProps) {
   const { sites } = useSites();
   const [selectedSite, setSelectedSite] = useState<Site | null>(null);
 
@@ -67,7 +72,10 @@ export function DashboardTab() {
       </div>
 
       {/* Chat sidebar -- per D-04 */}
-      <ChatSidebar />
+      <ChatSidebar
+        onLaunchPipeline={onLaunchPipeline}
+        pipelineStreaming={isStreaming}
+      />
     </div>
   );
 }
