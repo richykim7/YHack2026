@@ -37,3 +37,49 @@ export interface Inventory {
 export type TabId = 'dashboard' | 'map' | 'assessment' | 'plans' | 'followup';
 
 export const FOOD_CATEGORIES: FoodCategory[] = ['protein', 'grains', 'dairy', 'produce', 'canned', 'beverages'];
+
+// Phase 2: Chat & SCOPE types
+export interface ChatMessage {
+  id: string;
+  role: 'human' | 'ai';
+  content: string;
+  crisisProfile?: CrisisProfile;
+  timestamp: number;
+}
+
+export interface CrisisProfile {
+  crisis_type: string;
+  geography: string;
+  severity: number;
+  timeline_days: number;
+  demand_delta_pct: number;
+  affected_population: number;
+  notes: string;
+}
+
+// Phase 2: SSE & Activity types
+export type SSEEventType =
+  | 'agent_start'
+  | 'agent_end'
+  | 'hex_run_started'
+  | 'hex_run_completed'
+  | 'error'
+  | 'complete';
+
+export interface SSEEvent {
+  type: SSEEventType;
+  agent?: string;
+  message?: string;
+  timestamp: number;
+  data?: Record<string, unknown>;
+}
+
+export type AgentStatus = 'pending' | 'running' | 'complete' | 'error';
+
+export interface AgentActivity {
+  id: string;
+  agent: string;
+  status: AgentStatus;
+  message?: string;
+  timestamp: number;
+}
