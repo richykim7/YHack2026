@@ -60,21 +60,48 @@ export interface CrisisProfile {
   description: string;          // default "" in backend
 }
 
-// Phase 2: SSE & Activity types
+// Phase 2+4: SSE & Activity types
 export type SSEEventType =
+  // Existing (Phase 2-3)
   | 'agent_start'
   | 'agent_end'
   | 'hex_run_started'
   | 'hex_run_completed'
   | 'error'
-  | 'complete';
+  | 'complete'
+  | 'scope_message'
+  | 'scope_complete'
+  | 'assess_start'
+  | 'assess_complete'
+  | 'hex_assess_ready'
+  // New (Phase 4 contract)
+  | 'discover_start'
+  | 'source_found'
+  | 'discover_complete'
+  | 'optimize_start'
+  | 'plans_ready'
+  | 'hex_plans_ready'
+  | 'pipeline_complete'
+  | 'lava_usage';
 
 export interface SSEEvent {
   type: SSEEventType;
   agent?: string;
   message?: string;
   timestamp: number;
+  // Generic data payload
   data?: Record<string, unknown>;
+  // Typed payloads for specific events
+  content?: string;                    // scope_message
+  crisis_profile?: CrisisProfile;      // scope_complete
+  gap_analysis?: GapAnalysis;          // assess_complete
+  run_url?: string;                    // hex_assess_ready, hex_plans_ready, hex_run_started, hex_run_completed
+  status?: string;                     // hex_run_completed
+  source?: SourceOption;               // source_found
+  sources?: SourceOption[];            // discover_complete
+  total_count?: number;                // discover_complete
+  plans?: ResponsePlan[];              // plans_ready
+  costs?: LavaCostBreakdown;           // lava_usage
 }
 
 export type AgentStatus = 'pending' | 'running' | 'complete' | 'error';
@@ -164,9 +191,21 @@ export interface LavaCostBreakdown {
   model_tier: string;
 }
 
+// Phase 4: API endpoint contracts
+export interface DiscoverResponse {
+  sources: SourceOption[];
+  db_count: number;
+  web_count: number;
+}
+
+export interface OptimizeResponse {
+  plans: ResponsePlan[];
+}
+
 // Phase 4: Follow-up / Hex Threads types
 export interface FollowupResponse {
   answer: string;
   thread_url: string;
   thread_id: string | null;
+  chart_url?: string | null;
 }
