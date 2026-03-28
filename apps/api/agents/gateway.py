@@ -22,7 +22,7 @@ def get_llm(agent_name: str = "default", temperature: float = 0.3) -> ChatAnthro
                 temperature=temperature,
                 anthropic_api_url=os.getenv("LAVA_BASE_URL", "https://gateway.lava.so/v1"),
                 anthropic_api_key=os.getenv("LAVA_API_KEY", ""),
-                default_headers={"x-lava-tag": f"agent:{agent_name}"},
+                default_headers={"x-lava-tags": f"agent:{agent_name}"},
             )
         elif gateway == "openrouter":
             return ChatAnthropic(
