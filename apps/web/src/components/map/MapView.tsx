@@ -38,11 +38,18 @@ export function MapView({ sites, onSiteClick, onBackgroundClick }: MapViewProps)
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const sitesRef = useRef<Site[]>(sites);
+  const onSiteClickRef = useRef(onSiteClick);
+  const onBackgroundClickRef = useRef(onBackgroundClick);
 
-  // Keep sitesRef in sync for use in click handler
+  // Keep refs in sync so map click handlers always use latest callbacks
   useEffect(() => {
     sitesRef.current = sites;
   }, [sites]);
+
+  useEffect(() => {
+    onSiteClickRef.current = onSiteClick;
+    onBackgroundClickRef.current = onBackgroundClick;
+  }, [onSiteClick, onBackgroundClick]);
 
   // Initialize map
   useEffect(() => {
@@ -92,7 +99,7 @@ export function MapView({ sites, onSiteClick, onBackgroundClick }: MapViewProps)
         // Look up full Site object from the sites array by id
         const fullSite = sitesRef.current.find((s) => s.id === props.id);
         if (fullSite) {
-          onSiteClick(fullSite);
+          onSiteClickRef.current(fullSite);
         }
       });
 
@@ -102,7 +109,7 @@ export function MapView({ sites, onSiteClick, onBackgroundClick }: MapViewProps)
           layers: ['site-markers'],
         });
         if (features.length === 0) {
-          onBackgroundClick();
+          onBackgroundClickRef.current();
         }
       });
 
@@ -122,7 +129,8 @@ export function MapView({ sites, onSiteClick, onBackgroundClick }: MapViewProps)
       map.current?.remove();
       map.current = null;
     };
-  }, [onSiteClick, onBackgroundClick]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Sync sites data when it changes
   useEffect(() => {

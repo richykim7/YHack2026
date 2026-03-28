@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { MapView } from './MapView';
 import { SiteDetailCard } from './SiteDetailCard';
 import { useSites } from '@/hooks/useSites';
@@ -12,6 +12,8 @@ export function MapTab() {
   const { categoryTotals, loading: inventoryLoading } = useSiteInventory(
     selectedSite?.id ?? null,
   );
+
+  const clearSelection = useCallback(() => setSelectedSite(null), []);
 
   if (loading) {
     return (
@@ -34,14 +36,14 @@ export function MapTab() {
       <MapView
         sites={sites}
         onSiteClick={setSelectedSite}
-        onBackgroundClick={() => setSelectedSite(null)}
+        onBackgroundClick={clearSelection}
       />
       {selectedSite && (
         <SiteDetailCard
           site={selectedSite}
           inventoryTotals={categoryTotals}
           inventoryLoading={inventoryLoading}
-          onClose={() => setSelectedSite(null)}
+          onClose={clearSelection}
           className="absolute top-4 right-4 w-80 z-10"
         />
       )}
