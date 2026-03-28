@@ -1,7 +1,7 @@
 'use client';
 import { cn } from '@/components/ui/cn';
 import type { TabId } from '@/lib/types';
-import { LayoutDashboard, Map, ClipboardList, FileText, MessageCircle } from 'lucide-react';
+import { LayoutDashboard, Map, ClipboardList, FileText, MessageCircle, DollarSign } from 'lucide-react';
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -9,6 +9,7 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'assessment', label: 'Assessment', icon: ClipboardList },
   { id: 'plans', label: 'Plans', icon: FileText },
   { id: 'followup', label: 'Follow-up', icon: MessageCircle },
+  { id: 'usage', label: 'Usage', icon: DollarSign },
 ];
 
 interface TabNavigationProps {

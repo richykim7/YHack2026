@@ -8,6 +8,7 @@ import { MapTab } from '@/components/map/MapTab';
 import { AssessmentTab } from '@/components/assessment/AssessmentTab';
 import { PlansTab } from '@/components/placeholders/PlansTab';
 import { FollowUpTab } from '@/components/placeholders/FollowUpTab';
+import { UsageTab } from '@/components/usage/UsageTab';
 import { useCrisisStream } from '@/hooks/useCrisisStream';
 
 export function DashboardShell() {
@@ -45,6 +46,9 @@ export function DashboardShell() {
         </div>
         <div className={activeTab === 'followup' ? 'h-full' : 'hidden'}>
           <FollowUpTab />
+        </div>
+        <div className={activeTab === 'usage' ? 'h-full' : 'hidden'}>
+          <UsageTab />
         </div>
       </main>
     </div>

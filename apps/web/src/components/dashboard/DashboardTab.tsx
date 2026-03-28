@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { InventoryGauges } from './InventoryGauges';
 import { ChatSidebar } from './ChatSidebar';
+import { HexDashboard } from '@/components/hex/HexDashboard';
 import { useSites } from '@/hooks/useSites';
 import type { Site } from '@/lib/types';
 
@@ -50,24 +51,24 @@ export function DashboardTab({ onLaunchPipeline, isStreaming }: DashboardTabProp
           />
         </div>
 
-        {/* Activity feed placeholder */}
+        {/* Network Analytics (History) -- per D-04 */}
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
           <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">
-            Activity Feed
+            Network Analytics
           </h2>
-          <div className="text-sm text-slate-500">
-            <p>Agent activity will appear here during crisis response</p>
-          </div>
-        </div>
-
-        {/* Cost dashboard placeholder */}
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
-          <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">
-            AI Cost Dashboard
-          </h2>
-          <div className="text-sm text-slate-500">
-            <p>Per-agent cost breakdown will appear after pipeline runs</p>
-          </div>
+          <HexDashboard
+            title="CrisisGrid History"
+            runUrl={null}
+            isLoading={false}
+            isError={false}
+            height={350}
+            fallback={
+              <div className="text-sm text-slate-500 py-8 text-center">
+                <p>Historical analytics will appear here when Hex is configured.</p>
+                <p className="text-xs mt-1">Set HEX_HISTORY_PROJECT_ID to enable.</p>
+              </div>
+            }
+          />
         </div>
       </div>
 
