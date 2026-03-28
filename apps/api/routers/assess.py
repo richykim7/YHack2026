@@ -1,7 +1,8 @@
 from fastapi import APIRouter, BackgroundTasks
 
 from agents.gateway import get_llm
-from models.assess import AssessResponse, CrisisProfile, GapAnalysis, HexRunResult
+from models.crisis import CrisisProfile
+from models.assess import AssessResponse, GapAnalysis, HexRunResult
 from services.gap_analysis import compute_gap_locally
 from services.hex_client import HEX_ASSESS_PROJECT_ID, trigger_hex_run
 
@@ -67,10 +68,10 @@ async def run_assess(profile: CrisisProfile, background_tasks: BackgroundTasks):
                 HEX_ASSESS_PROJECT_ID,
                 {
                     "crisis_type": profile.crisis_type,
-                    "affected_area": profile.affected_area,
+                    "affected_area": profile.geography,
                     "demand_delta_pct": profile.demand_delta_pct,
                     "timeline_days": profile.timeline_days,
-                    "population_affected": profile.population_affected,
+                    "population_affected": profile.affected_population,
                 },
             )
             hex_run = HexRunResult(

@@ -44,6 +44,7 @@ export interface ChatMessage {
   role: 'human' | 'ai';
   content: string;
   crisisProfile?: CrisisProfile;
+  threadUrl?: string;
   timestamp: number;
 }
 
@@ -55,6 +56,8 @@ export interface CrisisProfile {
   demand_delta_pct: number;
   affected_population: number;
   notes: string;
+  food_categories: string[];   // default [] in backend
+  description: string;          // default "" in backend
 }
 
 // Phase 2: SSE & Activity types
@@ -119,4 +122,51 @@ export interface AgentCost {
 export interface AssessResponse {
   gap_analysis: GapAnalysis;
   hex_run: HexRunStatus | null;
+}
+
+// Phase 4: Pipeline contract types
+export interface SourceOption {
+  id: string;
+  supplier_name: string;
+  food_category: string;
+  item_name: string;
+  quantity_available_lbs: number;
+  unit_cost_per_lb: number;
+  lead_time_days: number;
+  reliability_score: number;
+  source_type: 'database' | 'web_search';
+  notes: string;
+}
+
+export interface PlanLineItem {
+  source_id: string;
+  supplier_name: string;
+  food_category: string;
+  item_name: string;
+  quantity_lbs: number;
+  cost: number;
+  lead_time_days: number;
+}
+
+export interface ResponsePlan {
+  name: 'fastest' | 'cheapest' | 'best_nutrition';
+  strategy: string;
+  line_items: PlanLineItem[];
+  total_cost: number;
+  coverage_pct: number;
+  max_lead_time_days: number;
+  estimated_people_served: number;
+}
+
+export interface LavaCostBreakdown {
+  total_cost: number;
+  by_agent: { agent: string; cost: number; tokens: number; requests: number }[];
+  model_tier: string;
+}
+
+// Phase 4: Follow-up / Hex Threads types
+export interface FollowupResponse {
+  answer: string;
+  thread_url: string;
+  thread_id: string | null;
 }

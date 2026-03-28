@@ -3,7 +3,8 @@ from datetime import datetime, timedelta, timezone
 
 from supabase import create_client
 
-from models.assess import CategoryGap, CrisisProfile, GapAnalysis
+from models.crisis import CrisisProfile
+from models.assess import CategoryGap, GapAnalysis
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
