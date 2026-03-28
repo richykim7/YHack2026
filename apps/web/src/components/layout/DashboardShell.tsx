@@ -5,7 +5,7 @@ import { DashboardHeader } from './DashboardHeader';
 import { TabNavigation } from './TabNavigation';
 import { DashboardTab } from '@/components/dashboard/DashboardTab';
 import { MapTab } from '@/components/map/MapTab';
-import { AssessmentTab } from '@/components/placeholders/AssessmentTab';
+import { AssessmentTab } from '@/components/assessment/AssessmentTab';
 import { PlansTab } from '@/components/placeholders/PlansTab';
 import { FollowUpTab } from '@/components/placeholders/FollowUpTab';
 import { useCrisisStream } from '@/hooks/useCrisisStream';
