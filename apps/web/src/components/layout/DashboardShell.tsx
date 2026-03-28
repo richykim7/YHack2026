@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { TabId } from '@/lib/types';
 import { DashboardHeader } from './DashboardHeader';
 import { TabNavigation } from './TabNavigation';
+import { MapTab } from '@/components/map/MapTab';
 import { AssessmentTab } from '@/components/placeholders/AssessmentTab';
 import { PlansTab } from '@/components/placeholders/PlansTab';
 import { FollowUpTab } from '@/components/placeholders/FollowUpTab';
@@ -21,9 +22,7 @@ export function DashboardShell() {
           </div>
         </div>
         <div className={activeTab === 'map' ? 'h-full' : 'hidden'}>
-          <div className="flex items-center justify-center h-full text-slate-500">
-            <p>Map content — Plan 02</p>
-          </div>
+          <MapTab />
         </div>
         <div className={activeTab === 'assessment' ? 'h-full' : 'hidden'}>
           <AssessmentTab />
