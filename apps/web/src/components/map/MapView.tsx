@@ -145,8 +145,14 @@ export function MapView({ sites, onSiteClick, onBackgroundClick }: MapViewProps)
   // handling both tab switching and window resizing.
   useEffect(() => {
     if (!mapContainer.current) return;
-    const observer = new ResizeObserver(() => {
-      map.current?.resize();
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry || !map.current) return;
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) {
+        map.current.resize();
+        map.current.fitBounds(PHILADELPHIA_BOUNDS, { padding: 60 });
+      }
     });
     observer.observe(mapContainer.current);
     return () => observer.disconnect();
