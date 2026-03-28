@@ -35,16 +35,19 @@ export function MapTab() {
     <div className="relative w-full h-full">
       <MapView
         sites={sites}
+        selectedSiteId={selectedSite?.id ?? null}
         onSiteClick={setSelectedSite}
         onBackgroundClick={clearSelection}
       />
+      {/* Vignette edge overlay */}
+      <div className="map-vignette" />
       {selectedSite && (
         <SiteDetailCard
           site={selectedSite}
           inventoryTotals={categoryTotals}
           inventoryLoading={inventoryLoading}
           onClose={clearSelection}
-          className="absolute top-4 right-4 w-80 z-10"
+          className="absolute top-4 right-4 w-80 z-10 animate-slide-in-right"
         />
       )}
     </div>

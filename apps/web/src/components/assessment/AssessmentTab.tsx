@@ -74,7 +74,7 @@ export function AssessmentTab({
               </div>
             ) : (
               <div>
-                <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">
+                <h2 className="text-sm font-display font-bold text-slate-300 uppercase tracking-widest mb-3">
                   Agent Activity
                 </h2>
                 <ActivityFeed events={events} />

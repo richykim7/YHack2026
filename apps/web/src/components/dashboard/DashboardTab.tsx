@@ -1,8 +1,10 @@
 'use client';
 import { useState } from 'react';
+import { NetworkHero } from './NetworkHero';
 import { InventoryGauges } from './InventoryGauges';
 import { ChatSidebar } from './ChatSidebar';
 import { HexDashboard } from '@/components/hex/HexDashboard';
+import { SiteSelector } from '@/components/ui/SiteSelector';
 import { useSites } from '@/hooks/useSites';
 import type { Site } from '@/lib/types';
 
@@ -18,42 +20,30 @@ export function DashboardTab({ onLaunchPipeline, isStreaming }: DashboardTabProp
   return (
     <div className="flex h-full">
       {/* Main content area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Site selector for inventory drill-down -- per D-13 */}
-        <div className="flex items-center gap-3">
-          <label className="text-sm text-slate-400">View inventory for:</label>
-          <select
-            className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-            value={selectedSite?.id ?? ''}
-            onChange={(e) => {
-              if (e.target.value === '') {
-                setSelectedSite(null);
-              } else {
-                const site = sites.find((s) => s.id === e.target.value) ?? null;
-                setSelectedSite(site);
-              }
-            }}
-          >
-            <option value="">All Sites (Network-wide)</option>
-            {sites.map((site) => (
-              <option key={site.id} value={site.id}>
-                {site.name}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        {/* Hero summary strip */}
+        <NetworkHero />
 
-        {/* Inventory gauges */}
+        {/* Site selector + Inventory */}
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-display font-bold text-slate-300 uppercase tracking-widest">
+              Inventory Breakdown
+            </h2>
+            <SiteSelector
+              sites={sites}
+              selectedSite={selectedSite}
+              onSelect={setSelectedSite}
+            />
+          </div>
           <InventoryGauges
             selectedSiteId={selectedSite?.id ?? null}
-            selectedSiteName={selectedSite?.name ?? null}
           />
         </div>
 
         {/* Network Analytics (History) -- per D-04 */}
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
-          <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">
+          <h2 className="text-sm font-display font-bold text-slate-300 uppercase tracking-widest mb-3">
             Network Analytics
           </h2>
           <HexDashboard

@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect, FormEvent } from 'react';
-import { MessageCircle, Send } from 'lucide-react';
+import { MessageCircle, Send, Zap, User, Bot } from 'lucide-react';
 import { useScopeChat } from '@/hooks/useScopeChat';
 import { CrisisProfileCard } from './CrisisProfileCard';
 
@@ -37,20 +37,34 @@ export function ChatSidebar({ onLaunchPipeline, pipelineStreaming }: ChatSidebar
   const isLaunched = pipelineLaunched || pipelineStreaming;
 
   return (
-    <div className="flex flex-col h-full bg-slate-800 border-l border-slate-700 w-80">
+    <div className="flex flex-col h-full bg-slate-850 border-l border-slate-700 w-80"
+      style={{ background: 'linear-gradient(180deg, #1a2332 0%, #0f172a 100%)' }}
+    >
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700">
-        <MessageCircle size={16} className="text-blue-400" />
-        <span className="text-sm font-semibold text-slate-200">Crisis Chat</span>
+      <div className="px-4 py-4 border-b border-slate-700/80">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-md bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+            <Zap size={14} className="text-blue-400" />
+          </div>
+          <div>
+            <h2 className="text-sm font-display font-bold text-slate-100 tracking-wide">SCOPE Agent</h2>
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Crisis analysis</p>
+          </div>
+        </div>
       </div>
 
       {/* Message list */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {messages.length === 0 && (
           <div className="flex-1 flex items-center justify-center h-full">
-            <div className="text-center text-slate-500">
-              <MessageCircle size={32} className="mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Describe a crisis to begin</p>
+            <div className="text-center px-4">
+              <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center mx-auto mb-3">
+                <MessageCircle size={20} className="text-slate-600" />
+              </div>
+              <p className="text-sm font-display font-semibold text-slate-400">Describe your crisis</p>
+              <p className="text-xs text-slate-600 mt-1">
+                e.g. &quot;Winter storm cutting off 3 distribution sites in NW Philly&quot;
+              </p>
             </div>
           </div>
         )}
@@ -58,16 +72,29 @@ export function ChatSidebar({ onLaunchPipeline, pipelineStreaming }: ChatSidebar
         {messages.map(msg => (
           <div
             key={msg.id}
-            className={`flex ${msg.role === 'human' ? 'justify-end' : 'justify-start'}`}
+            className={`flex items-start gap-2 ${msg.role === 'human' ? 'flex-row-reverse' : ''}`}
           >
+            {/* Avatar */}
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+              msg.role === 'human'
+                ? 'bg-blue-500/20 border border-blue-500/40'
+                : 'bg-emerald-500/15 border border-emerald-500/30'
+            }`}>
+              {msg.role === 'human'
+                ? <User size={12} className="text-blue-400" />
+                : <Bot size={12} className="text-emerald-400" />
+              }
+            </div>
+
+            {/* Message bubble */}
             <div
-              className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+              className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${
                 msg.role === 'human'
-                  ? 'bg-blue-500/20 text-slate-200'
-                  : 'bg-slate-700 text-slate-200'
+                  ? 'bg-blue-500/15 border border-blue-500/20 text-slate-200 rounded-tr-sm'
+                  : 'bg-slate-800/80 border border-slate-700/60 text-slate-300 rounded-tl-sm'
               }`}
             >
-              <p className="whitespace-pre-wrap">{msg.content}</p>
+              <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
               {msg.crisisProfile && (
                 <CrisisProfileCard
                   profile={msg.crisisProfile}
@@ -81,9 +108,16 @@ export function ChatSidebar({ onLaunchPipeline, pipelineStreaming }: ChatSidebar
 
         {/* Typing indicator */}
         {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-slate-700 rounded-lg px-3 py-2 text-sm text-slate-400">
-              <span className="animate-pulse">SCOPE is analyzing...</span>
+          <div className="flex items-start gap-2">
+            <div className="w-6 h-6 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0 mt-0.5">
+              <Bot size={12} className="text-emerald-400" />
+            </div>
+            <div className="bg-slate-800/80 border border-slate-700/60 rounded-xl rounded-tl-sm px-3 py-2">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
             </div>
           </div>
         )}
@@ -92,22 +126,22 @@ export function ChatSidebar({ onLaunchPipeline, pipelineStreaming }: ChatSidebar
       </div>
 
       {/* Input bar */}
-      <form onSubmit={handleSubmit} className="p-3 border-t border-slate-700">
-        <div className="flex gap-2">
+      <form onSubmit={handleSubmit} className="p-3 border-t border-slate-700/80 bg-slate-900/50">
+        <div className="flex gap-2 items-end">
           <input
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder="Describe a crisis..."
-            className="flex-1 bg-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 border border-slate-600 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            className="flex-1 bg-slate-800 text-slate-200 text-sm rounded-xl px-4 py-2.5 border border-slate-700 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/50 transition-shadow"
           />
           <button
             type="submit"
             disabled={!input.trim() || isLoading}
-            className={`px-3 py-2 rounded-lg text-sm transition-colors ${
+            className={`p-2.5 rounded-xl text-sm transition-all ${
               !input.trim() || isLoading
-                ? 'bg-blue-500/30 text-blue-300 cursor-not-allowed'
-                : 'bg-blue-500 text-white hover:bg-blue-600'
+                ? 'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-700'
+                : 'bg-blue-500 text-white hover:bg-blue-400 shadow-lg shadow-blue-500/20'
             }`}
           >
             <Send size={16} />

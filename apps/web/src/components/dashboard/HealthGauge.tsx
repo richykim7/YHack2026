@@ -46,7 +46,7 @@ export function HealthGauge({ score, size = 120, strokeWidth = 8 }: HealthGaugeP
         />
       </svg>
       <span
-        className="absolute text-2xl font-semibold tabular-nums"
+        className="absolute font-mono text-lg font-semibold tabular-nums"
         style={{ color }}
       >
         {(score * 100).toFixed(0)}

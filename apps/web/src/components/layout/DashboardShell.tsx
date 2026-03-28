@@ -14,11 +14,17 @@ import { API_BASE } from '@/lib/api';
 
 export function DashboardShell() {
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
-  const { events, isStreaming, isComplete, launchAndStream, stopStream } =
+  const [tabKey, setTabKey] = useState(0);
+  const { events, isStreaming, isComplete, launchAndStream } =
     useCrisisStream();
   const [gapAnalysis, setGapAnalysis] = useState<GapAnalysis | null>(null);
   const [hexRunUrl, setHexRunUrl] = useState<string | null>(null);
   const crisisProfileRef = useRef<Record<string, unknown> | null>(null);
+
+  const handleTabChange = useCallback((tab: TabId) => {
+    setActiveTab(tab);
+    setTabKey(k => k + 1);
+  }, []);
 
   const handleLaunch = useCallback(
     async (sessionId: string, crisisProfile: Record<string, unknown>) => {
@@ -51,20 +57,20 @@ export function DashboardShell() {
       <DashboardHeader />
       <TabNavigation
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         isStreaming={isStreaming}
       />
       <main className="flex-1 overflow-hidden">
-        <div className={activeTab === 'dashboard' ? 'h-full' : 'hidden'}>
+        <div key={activeTab === 'dashboard' ? `dashboard-${tabKey}` : 'dashboard'} className={activeTab === 'dashboard' ? 'h-full animate-tab-in' : 'hidden'}>
           <DashboardTab
             onLaunchPipeline={handleLaunch}
             isStreaming={isStreaming}
           />
         </div>
-        <div className={activeTab === 'map' ? 'h-full' : 'hidden'}>
+        <div key={activeTab === 'map' ? `map-${tabKey}` : 'map'} className={activeTab === 'map' ? 'h-full animate-tab-in' : 'hidden'}>
           <MapTab />
         </div>
-        <div className={activeTab === 'assessment' ? 'h-full' : 'hidden'}>
+        <div key={activeTab === 'assessment' ? `assessment-${tabKey}` : 'assessment'} className={activeTab === 'assessment' ? 'h-full animate-tab-in' : 'hidden'}>
           <AssessmentTab
             gapAnalysis={gapAnalysis}
             hexRunUrl={hexRunUrl}
@@ -73,13 +79,13 @@ export function DashboardShell() {
             isComplete={isComplete}
           />
         </div>
-        <div className={activeTab === 'plans' ? 'h-full' : 'hidden'}>
+        <div key={activeTab === 'plans' ? `plans-${tabKey}` : 'plans'} className={activeTab === 'plans' ? 'h-full animate-tab-in' : 'hidden'}>
           <PlansTab />
         </div>
-        <div className={activeTab === 'followup' ? 'h-full' : 'hidden'}>
+        <div key={activeTab === 'followup' ? `followup-${tabKey}` : 'followup'} className={activeTab === 'followup' ? 'h-full animate-tab-in' : 'hidden'}>
           <FollowUpTab />
         </div>
-        <div className={activeTab === 'usage' ? 'h-full' : 'hidden'}>
+        <div key={activeTab === 'usage' ? `usage-${tabKey}` : 'usage'} className={activeTab === 'usage' ? 'h-full animate-tab-in' : 'hidden'}>
           <UsageTab />
         </div>
       </main>

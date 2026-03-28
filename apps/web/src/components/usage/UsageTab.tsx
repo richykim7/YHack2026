@@ -64,10 +64,10 @@ export function UsageTab() {
     <div className="h-full overflow-y-auto p-6 space-y-4">
       {/* Hero: Total Pipeline Cost */}
       <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 text-center">
-        <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">
+        <p className="text-xs font-display font-semibold text-slate-400 uppercase tracking-widest mb-2">
           Total Pipeline Cost
         </p>
-        <p className="text-4xl font-bold text-slate-100 tabular-nums">
+        <p className="text-4xl font-mono font-bold text-slate-100 tabular-nums">
           {formattedCost}
         </p>
         <p className="text-sm text-slate-400 mt-1">
@@ -78,13 +78,13 @@ export function UsageTab() {
       {/* Charts: Donut + Sparkline */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
-          <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">
+          <h2 className="text-sm font-display font-bold text-slate-300 uppercase tracking-widest mb-3">
             Cost by Agent
           </h2>
           <CostDonut costs={costs} />
         </div>
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
-          <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">
+          <h2 className="text-sm font-display font-bold text-slate-300 uppercase tracking-widest mb-3">
             Cumulative Cost
           </h2>
           <CostSparkline costs={costs} />
@@ -93,7 +93,7 @@ export function UsageTab() {
 
       {/* Agent Details Table */}
       <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
-        <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">
+        <h2 className="text-sm font-display font-bold text-slate-300 uppercase tracking-widest mb-3">
           Agent Details
         </h2>
         {costs.length === 0 ? (

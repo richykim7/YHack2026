@@ -19,7 +19,7 @@ export function CrisisProfileCard({ profile, onLaunchPipeline, pipelineLaunched 
     <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-3 mt-2">
       <div className="flex items-center gap-2 mb-3">
         <AlertTriangle size={14} className="text-amber-400" />
-        <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+        <span className="text-xs font-display font-bold text-slate-300 uppercase tracking-widest">
           Crisis Profile
         </span>
       </div>

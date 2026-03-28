@@ -9,7 +9,7 @@ interface GapAnalysisChartProps {
 export function GapAnalysisChart({ gaps, aiSummary }: GapAnalysisChartProps) {
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
-      <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4">
+      <h3 className="text-sm font-display font-bold text-slate-300 uppercase tracking-widest mb-4">
         Supply Gap Analysis
       </h3>
 

@@ -26,7 +26,7 @@ export function TabNavigation({ activeTab, onTabChange, isStreaming }: TabNaviga
           key={id}
           onClick={() => onTabChange(id)}
           className={cn(
-            'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors',
+            'flex items-center gap-2 px-4 py-2 text-sm font-display font-semibold tracking-wide rounded-md transition-colors',
             activeTab === id
               ? 'bg-slate-700 text-blue-400'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'

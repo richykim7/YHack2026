@@ -1,7 +1,7 @@
 'use client';
-import { X } from 'lucide-react';
+import { X, MapPin, Users, Package } from 'lucide-react';
 import { cn } from '@/components/ui/cn';
-import { HEALTH_THRESHOLDS } from '@/lib/constants';
+import { HealthGauge } from '@/components/dashboard/HealthGauge';
 import type { Site } from '@/lib/types';
 import type { SiteCategoryTotal } from '@/hooks/useSiteInventory';
 
@@ -20,84 +20,78 @@ export function SiteDetailCard({
   onClose,
   className,
 }: SiteDetailCardProps) {
-  const scoreColor =
-    site.health_score >= HEALTH_THRESHOLDS.good
-      ? 'text-green-400'
-      : site.health_score >= HEALTH_THRESHOLDS.warning
-        ? 'text-amber-400'
-        : 'text-red-400';
-
   return (
     <div
       className={cn(
-        'bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-4',
+        'border border-slate-700/80 rounded-xl shadow-2xl shadow-black/40 overflow-hidden',
         className,
       )}
+      style={{ background: 'linear-gradient(180deg, #1a2332 0%, #141c2b 100%)' }}
     >
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-100">{site.name}</h3>
-          <p className="text-xs text-slate-400 capitalize">
-            {site.type.replace('_', ' ')}
-          </p>
+      {/* Header */}
+      <div className="flex items-start justify-between p-4 pb-3">
+        <div className="flex items-center gap-3">
+          <HealthGauge score={site.health_score} size={40} strokeWidth={4} />
+          <div>
+            <h3 className="text-sm font-display font-bold text-slate-100 tracking-wide">{site.name}</h3>
+            <p className="text-[11px] text-slate-500 capitalize font-display tracking-wide">
+              {site.type.replace('_', ' ')}
+            </p>
+          </div>
         </div>
         <button
           onClick={onClose}
-          className="text-slate-400 hover:text-slate-200 p-1"
+          className="text-slate-500 hover:text-slate-300 p-1 rounded-md hover:bg-slate-700/50 transition-colors"
         >
-          <X size={16} />
+          <X size={14} />
         </button>
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-slate-400">Health Score</span>
-          <span className={cn('text-lg font-bold tabular-nums', scoreColor)}>
-            {(site.health_score * 100).toFixed(0)}%
-          </span>
-        </div>
+      {/* Details grid */}
+      <div className="px-4 pb-3 grid grid-cols-2 gap-2.5">
         {site.region && (
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400">Region</span>
-            <span className="text-xs text-slate-300">{site.region}</span>
+          <div className="flex items-center gap-1.5">
+            <MapPin size={11} className="text-slate-600 shrink-0" />
+            <span className="text-xs text-slate-400">{site.region}</span>
           </div>
         )}
         {site.serves_population != null && (
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400">Serves</span>
-            <span className="text-xs text-slate-300">
-              {site.serves_population.toLocaleString()} people
+          <div className="flex items-center gap-1.5">
+            <Users size={11} className="text-slate-600 shrink-0" />
+            <span className="text-xs text-slate-400">
+              {site.serves_population.toLocaleString()} served
             </span>
           </div>
         )}
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-slate-400">Capacity</span>
-          <span className="text-xs text-slate-300">
-            {site.capacity_total_lbs.toLocaleString()} lbs
+        <div className="flex items-center gap-1.5">
+          <Package size={11} className="text-slate-600 shrink-0" />
+          <span className="text-xs text-slate-400">
+            {site.capacity_total_lbs.toLocaleString()} lbs cap.
           </span>
         </div>
       </div>
 
-      {/* Per-site inventory summary -- per MAP-03 */}
-      <div className="mt-3 pt-3 border-t border-slate-700">
-        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-          Inventory (Available)
+      {/* Inventory section */}
+      <div className="border-t border-slate-700/60 px-4 py-3">
+        <h4 className="text-[11px] font-display font-semibold text-slate-500 uppercase tracking-widest mb-2.5">
+          Available Inventory
         </h4>
         {inventoryLoading ? (
-          <p className="text-xs text-slate-500">Loading...</p>
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-3 bg-slate-700/30 rounded animate-pulse" />
+            ))}
+          </div>
         ) : inventoryTotals.length === 0 ? (
-          <p className="text-xs text-slate-500">No available inventory</p>
+          <p className="text-xs text-slate-600">No available inventory</p>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {inventoryTotals.map((t) => (
-              <div
-                key={t.category}
-                className="flex items-center justify-between"
-              >
-                <span className="text-xs text-slate-400 capitalize">
+              <div key={t.category} className="flex items-center justify-between">
+                <span className="text-xs text-slate-400 capitalize font-display tracking-wide">
                   {t.category}
                 </span>
-                <span className="text-xs text-slate-300 tabular-nums">
+                <span className="text-xs font-mono text-slate-300 tabular-nums">
                   {t.totalLbs.toLocaleString()} lbs
                 </span>
               </div>
@@ -106,7 +100,13 @@ export function SiteDetailCard({
         )}
       </div>
 
-      <p className="text-xs text-slate-500 mt-3">{site.address}</p>
+      {/* Footer */}
+      <div className="px-4 py-2.5 border-t border-slate-700/40 bg-slate-900/30">
+        <p className="text-[10px] text-slate-600 flex items-center gap-1">
+          <MapPin size={9} className="shrink-0" />
+          {site.address}
+        </p>
+      </div>
     </div>
   );
 }
