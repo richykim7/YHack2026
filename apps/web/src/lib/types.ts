@@ -34,7 +34,7 @@ export interface Inventory {
   created_at: string;
 }
 
-export type TabId = 'dashboard' | 'map' | 'assessment' | 'plans' | 'followup';
+export type TabId = 'dashboard' | 'map' | 'assessment' | 'plans' | 'followup' | 'usage';
 
 export const FOOD_CATEGORIES: FoodCategory[] = ['protein', 'grains', 'dairy', 'produce', 'canned', 'beverages'];
 
@@ -82,4 +82,41 @@ export interface AgentActivity {
   status: AgentStatus;
   message?: string;
   timestamp: number;
+}
+
+// Phase 3: ASSESS pipeline types
+export interface CategoryGap {
+  category: FoodCategory;
+  supply_lbs: number;
+  demand_lbs: number;
+  gap_lbs: number;
+  coverage_ratio: number;
+}
+
+export interface GapAnalysis {
+  total_supply_lbs: number;
+  total_demand_lbs: number;
+  total_gap_lbs: number;
+  gaps_by_category: CategoryGap[];
+  expiration_risk_lbs: number;
+  site_health_scores: Record<string, number>;
+  ai_summary: string;
+}
+
+export interface HexRunStatus {
+  run_id: string;
+  run_url: string;
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'ERRORED' | 'KILLED' | 'TIMEOUT';
+}
+
+export interface AgentCost {
+  agent: string;
+  cost: number;
+  tokens: number;
+  requests: number;
+}
+
+export interface AssessResponse {
+  gap_analysis: GapAnalysis;
+  hex_run: HexRunStatus | null;
 }
