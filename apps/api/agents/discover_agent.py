@@ -51,7 +51,7 @@ async def discover_sources(
     db_task = asyncio.to_thread(
         _query_supplier_catalog, deficit_categories, profile
     )
-    tavily_task = _search_tavily(deficit_categories, profile.geography)
+    tavily_task = _search_web_via_lava(deficit_categories, profile.geography)
 
     db_sources, web_sources = await asyncio.gather(db_task, tavily_task)
 
@@ -171,10 +171,13 @@ def _row_to_source_option(row: dict) -> SourceOption | None:
         return None
 
 
-async def _search_tavily(
+async def _search_web_via_lava(
     categories: list[str], geography: str
 ) -> list[SourceOption]:
-    """Search Tavily for emergency food suppliers matching deficit categories.
+    """Search for emergency food suppliers via Serper (through Lava managed proxy).
+
+    Lava proxies to Serper (Google Search) with managed billing — no separate
+    Serper or Tavily API key needed, just LAVA_API_TOKEN.
 
     Args:
         categories: Food categories to search for.
@@ -183,44 +186,57 @@ async def _search_tavily(
     Returns:
         List of SourceOption from web search (max 5 total).
     """
-    api_key = os.environ.get("TAVILY_API_KEY", "")
-    if not api_key:
-        logger.warning("TAVILY_API_KEY not set, skipping web search")
+    lava_token = os.environ.get("LAVA_API_TOKEN", "")
+    if not lava_token:
+        logger.warning("LAVA_API_TOKEN not set, skipping web search")
         return []
 
     try:
-        from tavily import TavilyClient
+        import httpx
 
-        client = TavilyClient(api_key=api_key)
         sources: list[SourceOption] = []
+        serper_url = (
+            "https://api.lava.so/v1/forward"
+            "?u=https%3A%2F%2Fgoogle.serper.dev%2Fsearch"
+        )
 
-        for cat in categories:
-            if len(sources) >= 5:
-                break
-
-            query = f"emergency food supplier {cat} {geography}"
-            results = await asyncio.to_thread(
-                client.search, query, max_results=2
-            )
-
-            for result in results.get("results", []):
+        async with httpx.AsyncClient() as client:
+            for cat in categories:
                 if len(sources) >= 5:
                     break
-                src = _tavily_result_to_source_option(result, cat)
-                sources.append(src)
 
-        logger.info("Tavily returned %d web sources", len(sources))
+                resp = await client.post(
+                    serper_url,
+                    json={
+                        "q": f"emergency food supplier {cat} {geography}",
+                        "num": 2,
+                    },
+                    headers={
+                        "Authorization": f"Bearer {lava_token}",
+                        "Content-Type": "application/json",
+                    },
+                    timeout=10.0,
+                )
+                data = resp.json()
+
+                for result in data.get("organic", []):
+                    if len(sources) >= 5:
+                        break
+                    src = _web_result_to_source_option(result, cat)
+                    sources.append(src)
+
+        logger.info("Serper/Lava returned %d web sources", len(sources))
         return sources
 
     except Exception as e:
-        logger.warning("Tavily search failed: %s", e)
+        logger.warning("Web search via Lava failed: %s", e)
         return []
 
 
-def _tavily_result_to_source_option(
+def _web_result_to_source_option(
     result: dict, category: str
 ) -> SourceOption:
-    """Map a Tavily search result to a SourceOption with sensible defaults.
+    """Map a Serper search result to a SourceOption with sensible defaults.
 
     Web sources get conservative defaults:
     - quantity: 1000 lbs (reasonable minimum order)
@@ -238,7 +254,7 @@ def _tavily_result_to_source_option(
         lead_time_days=3,
         reliability_score=0.5,
         source_type="web_search",
-        notes=result.get("url", ""),
+        notes=result.get("link", ""),
     )
 
 

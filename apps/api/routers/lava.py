@@ -5,8 +5,8 @@ from fastapi import APIRouter, Query
 
 router = APIRouter(prefix="/api/lava", tags=["lava"])
 
-AI_GATEWAY = os.environ.get("AI_GATEWAY", "openrouter")
-LAVA_API_KEY = os.environ.get("LAVA_API_KEY", "")
+AI_GATEWAY = os.environ.get("AI_GATEWAY", "lava")
+LAVA_API_TOKEN = os.environ.get("LAVA_API_TOKEN", "")
 LAVA_BASE_URL = os.environ.get("LAVA_BASE_URL", "https://api.lava.so")
 
 
@@ -17,14 +17,14 @@ async def get_costs(limit: int = Query(default=100, le=500)):
     Implements COST-01, COST-02, COST-03.
     Returns [] when AI_GATEWAY is not lava (per D-11).
     """
-    if AI_GATEWAY != "lava" or not LAVA_API_KEY:
+    if AI_GATEWAY != "lava" or not LAVA_API_TOKEN:
         return {"costs": [], "total_cost": 0.0, "gateway": AI_GATEWAY}
 
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get(
                 f"{LAVA_BASE_URL}/v1/requests",
-                headers={"Authorization": f"Bearer {LAVA_API_KEY}"},
+                headers={"Authorization": f"Bearer {LAVA_API_TOKEN}"},
                 params={"limit": limit},
                 timeout=10.0,
             )
