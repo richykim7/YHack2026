@@ -65,6 +65,7 @@ export function DashboardShell() {
           <DashboardTab
             onLaunchPipeline={handleLaunch}
             isStreaming={isStreaming}
+            pipelineComplete={isComplete}
           />
         </div>
         <div key={activeTab === 'map' ? `map-${tabKey}` : 'map'} className={activeTab === 'map' ? 'h-full animate-tab-in' : 'hidden'}>
@@ -83,7 +84,7 @@ export function DashboardShell() {
           <PlansTab />
         </div>
         <div key={activeTab === 'followup' ? `followup-${tabKey}` : 'followup'} className={activeTab === 'followup' ? 'h-full animate-tab-in' : 'hidden'}>
-          <FollowUpTab />
+          <FollowUpTab pipelineComplete={isComplete} />
         </div>
         <div key={activeTab === 'usage' ? `usage-${tabKey}` : 'usage'} className={activeTab === 'usage' ? 'h-full animate-tab-in' : 'hidden'}>
           <UsageTab />
