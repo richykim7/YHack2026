@@ -135,6 +135,7 @@ export interface SSEEvent {
   model?: string;
   // Phase 14: Pipeline run tracking
   pipeline_run_id?: string;
+  pipeline_duration_ms?: number;
 }
 
 export type AgentStatus = 'pending' | 'running' | 'complete' | 'error';

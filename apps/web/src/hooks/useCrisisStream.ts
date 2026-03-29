@@ -118,6 +118,9 @@ export function useCrisisStream() {
   // Session ID (Phase 14)
   const [sessionId, setSessionId] = useState<string | null>(null);
 
+  // Pipeline duration (actual measured time from backend)
+  const [pipelineDurationMs, setPipelineDurationMs] = useState<number | undefined>(undefined);
+
   // Monitor state (Phase 12)
   const [monitorPosts, setMonitorPosts] = useState<MonitorPost[]>([]);
   const [classifications, setClassifications] = useState<Map<string, MonitorClassification>>(new Map());
@@ -144,6 +147,7 @@ export function useCrisisStream() {
       setHexAssessUrl(null);
       setLavaCosts(null);
       setGapAnalysis(null);
+      setPipelineDurationMs(undefined);
 
       abortRef.current = new AbortController();
 
@@ -194,6 +198,10 @@ export function useCrisisStream() {
                 setLavaCosts(event.costs);
               }
 
+              if (event.type === 'pipeline_complete' && event.pipeline_duration_ms) {
+                setPipelineDurationMs(event.pipeline_duration_ms);
+              }
+
               if (event.type === 'complete' || event.type === 'pipeline_complete' || event.type === 'error') {
                 setIsComplete(true);
                 setIsStreaming(false);
@@ -240,6 +248,7 @@ export function useCrisisStream() {
     setHexAssessUrl(null);
     setLavaCosts(null);
     setGapAnalysis(null);
+    setPipelineDurationMs(undefined);
     setIsStreaming(true);
     setIsComplete(false);
 
@@ -316,6 +325,10 @@ export function useCrisisStream() {
             // Add to activity feed
             setEvents(prev => [...prev, eventToActivity(event)]);
 
+            if (event.type === 'pipeline_complete' && event.pipeline_duration_ms) {
+              setPipelineDurationMs(event.pipeline_duration_ms);
+            }
+
             if (event.type === 'complete' || event.type === 'pipeline_complete' || event.type === 'error') {
               setIsComplete(true);
               setIsStreaming(false);
@@ -353,6 +366,8 @@ export function useCrisisStream() {
     sources, plans, hexPlansUrl, hexAssessUrl, lavaCosts, gapAnalysis,
     // Session ID (Phase 14)
     sessionId,
+    // Pipeline duration (actual measured time from backend)
+    pipelineDurationMs,
     // Monitor state (Phase 12)
     monitorPosts, classifications, crisisDetected, monitorMode,
     startMonitorAndStream,

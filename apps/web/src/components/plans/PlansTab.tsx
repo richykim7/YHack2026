@@ -35,9 +35,10 @@ export function PlansTab({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
 
-  // TODO: Remove mock fallback when backend is ready
-  const displayPlans = plans.length > 0 ? plans : MOCK_PLANS;
-  const isMockData = plans.length === 0;
+  // Use real plans from pipeline; only fall back to mock data if pipeline completed with no plans
+  const useMockFallback = plans.length === 0 && isComplete && !isStreaming;
+  const displayPlans = plans.length > 0 ? plans : useMockFallback ? MOCK_PLANS : [];
+  const isMockData = useMockFallback;
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-6">

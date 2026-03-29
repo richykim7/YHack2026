@@ -123,6 +123,7 @@ class PipelineCompleteEvent(BaseModel):
     type: Literal["pipeline_complete"] = "pipeline_complete"
     timestamp: float
     pipeline_run_id: str = ""
+    pipeline_duration_ms: int = 0
 
 
 class PlanAcceptedEvent(BaseModel):

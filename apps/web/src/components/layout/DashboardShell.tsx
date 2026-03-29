@@ -21,6 +21,7 @@ export function DashboardShell() {
   const {
     events, isStreaming, isComplete, launchAndStream, plans, sources, hexPlansUrl, hexAssessUrl, gapAnalysis,
     sessionId,
+    pipelineDurationMs,
     monitorPosts, classifications, crisisDetected, monitorMode, startMonitorAndStream,
   } = useCrisisStream();
   const [selectedPlan, setSelectedPlan] = useState<SelectedPlanState>(null);
@@ -143,7 +144,7 @@ export function DashboardShell() {
           <FollowUpTab pipelineComplete={isComplete} />
         </div>
         <div key={activeTab === 'usage' ? `usage-${tabKey}` : 'usage'} className={activeTab === 'usage' ? 'h-full animate-tab-in' : 'hidden'}>
-          <UsageTab pipelineComplete={isComplete} plans={plans} sources={sources} />
+          <UsageTab pipelineComplete={isComplete} plans={plans} sources={sources} pipelineDurationMs={pipelineDurationMs} />
         </div>
       </main>
     </div>

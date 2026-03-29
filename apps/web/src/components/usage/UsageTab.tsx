@@ -8,11 +8,11 @@ import { ModelBadge } from './ModelBadge';
 import type { ResponsePlan, SourceOption } from '@/lib/types';
 
 const AGENT_MODEL_MAP: Record<string, string> = {
-  scope: 'gemini-2.5-flash',
-  assess: 'gemini-2.5-pro',
-  monitor: 'gemini-2.5-flash',
-  researcher: 'gemini-2.5-pro',
-  profiler: 'gpt-4.1-mini',
+  monitor: 'Gemini 2.5 Flash',
+  scope: 'Gemini 2.5 Flash',
+  assess: 'Gemini 2.5 Pro',
+  researcher: 'Gemini 2.5 Pro',
+  profiler: 'GPT-4.1-mini',
   optimize: 'Deterministic',
 };
 
@@ -20,9 +20,10 @@ interface UsageTabProps {
   pipelineComplete?: boolean;
   plans?: ResponsePlan[];
   sources?: SourceOption[];
+  pipelineDurationMs?: number;
 }
 
-export function UsageTab({ pipelineComplete = false, plans = [], sources = [] }: UsageTabProps) {
+export function UsageTab({ pipelineComplete = false, plans = [], sources = [], pipelineDurationMs }: UsageTabProps) {
   const { costs, totalCost, gateway, loading, error, refetch } = useLavaCosts();
 
   // Refetch costs when pipeline completes (3s delay for Lava API processing)
@@ -36,7 +37,7 @@ export function UsageTab({ pipelineComplete = false, plans = [], sources = [] }:
   const totalRequests = costs.reduce((sum, c) => sum + c.requests, 0);
 
   // Compute impact metrics from plans and sources
-  const pipelineDurationMs = 45000; // Estimate ~45s for full pipeline
+  const effectiveDurationMs = pipelineDurationMs ?? 45000; // Use actual duration, fallback to estimate
   const suppliersIdentified = new Set(
     plans.flatMap(p => p.line_items.map(li => li.supplier_name))
   ).size || sources.length;
@@ -107,7 +108,7 @@ export function UsageTab({ pipelineComplete = false, plans = [], sources = [] }:
     <div className="h-full overflow-y-auto p-6 space-y-4">
       {/* 1. Impact Hero Strip */}
       <ImpactHero
-        pipelineDurationMs={pipelineDurationMs}
+        pipelineDurationMs={effectiveDurationMs}
         suppliersIdentified={suppliersIdentified}
         categoriesCovered={categoriesCovered}
         totalCost={totalCost}

@@ -253,7 +253,8 @@ async def run_pipeline(session_id: str, crisis_profile: dict):
             logger.warning("Failed to store pipeline results in crisis_events: %s", e)
 
         # Pipeline complete
-        await _emit(queue, PipelineCompleteEvent(timestamp=time.time(), pipeline_run_id=pipeline_run_id))
+        total_duration_ms = int((time.time() - pipeline_start) * 1000)
+        await _emit(queue, PipelineCompleteEvent(timestamp=time.time(), pipeline_run_id=pipeline_run_id, pipeline_duration_ms=total_duration_ms))
 
     except Exception as e:
         logger.error("Pipeline error for session %s: %s", session_id, e, exc_info=True)
