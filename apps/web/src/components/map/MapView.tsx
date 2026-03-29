@@ -51,6 +51,22 @@ function sitesToGeoJSON(sites: Site[]): GeoJSON.FeatureCollection<GeoJSON.Point>
   };
 }
 
+// Precomputed dash-array sequence for flowing-dash animation.
+// Cycling through these at ~60ms intervals creates the illusion of
+// dashes moving along the line in the direction of the geometry.
+const DASH_SEQUENCE: number[][] = [
+  [0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5],
+  [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0], [3.5, 3.5, 0],
+  [4, 3, 0], [3, 0.5, 3.5], [2, 1, 4], [1, 1.5, 4.5],
+  [0, 2, 5],
+];
+
+interface SiteDeliveryInfo {
+  totalLbs: number;
+  suppliers: Set<string>;
+  categories: Set<string>;
+}
+
 export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick, selectedPlan }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -60,6 +76,8 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
   const onSiteClickRef = useRef(onSiteClick);
   const onBackgroundClickRef = useRef(onBackgroundClick);
   const selectedPlanRef = useRef(selectedPlan ?? null);
+  const animationRef = useRef<number | null>(null);
+  const siteDeliveryMapRef = useRef<Map<string, SiteDeliveryInfo> | null>(null);
 
   // Keep refs in sync so map click handlers always use latest callbacks
   useEffect(() => {
@@ -198,7 +216,7 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
         }
       });
 
-      // Hover: show popup with site name + health
+      // Hover: show popup with site name + health (+ delivery delta when plan selected)
       m.on('mouseenter', 'site-markers', (e) => {
         m.getCanvas().style.cursor = 'pointer';
         if (!e.features || e.features.length === 0 || !popup.current) return;
@@ -211,6 +229,33 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
         const scoreColor = score >= 70 ? '#4ade80' : score >= 50 ? '#fbbf24' : '#f87171';
         const typeLabel = props.type === 'warehouse' ? 'Warehouse' : 'Distribution Site';
 
+        // Build delivery delta section when a plan is selected
+        let deliveryHtml = '';
+        const deliveryMap = siteDeliveryMapRef.current;
+        if (selectedPlanRef.current && deliveryMap) {
+          const siteId = props.id as string;
+          const info = deliveryMap.get(siteId);
+          if (info) {
+            const healthScore = props.health_score as number;
+            const projectedScore = Math.min(
+              healthScore + (1 - healthScore) * Math.min(info.totalLbs / 5000, 1) * 0.3,
+              1.0,
+            );
+            const projectedPct = Math.round(projectedScore * 100);
+            const categories = Array.from(info.categories).join(', ');
+            deliveryHtml = `
+              <div style="border-top: 1px solid #334155; margin: 4px 0; padding-top: 4px;">
+                <div style="font-size: 11px; color: #e2e8f0; font-family: var(--font-code), monospace;">${info.totalLbs.toLocaleString()} lbs incoming</div>
+                <div style="font-size: 10px; color: #94a3b8;">${info.suppliers.size} supplier(s) &middot; ${categories}</div>
+                <div style="font-size: 11px; margin-top: 2px;">
+                  <span style="color: ${scoreColor}; font-family: var(--font-code), monospace;">${score}%</span>
+                  <span style="color: #64748b;"> &rarr; </span>
+                  <span style="color: #34d399; font-family: var(--font-code), monospace;">${projectedPct}%</span>
+                </div>
+              </div>`;
+          }
+        }
+
         popup.current
           .setLngLat(coords)
           .setHTML(`
@@ -218,6 +263,7 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
               <div style="font-weight: 600; font-size: 12px; color: #e2e8f0; margin-bottom: 2px;">${props.name}</div>
               <div style="font-size: 10px; color: #94a3b8; margin-bottom: 2px;">${typeLabel}</div>
               <div style="font-size: 11px; color: ${scoreColor}; font-family: var(--font-code), monospace;">${score}% health</div>
+              ${deliveryHtml}
             </div>
           `)
           .addTo(m);
@@ -274,14 +320,25 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
     let cleanupHandlers: (() => void) | null = null;
 
     const applyOverlays = () => {
-      // Remove previous supplier/route layers if they exist
+      // Cancel any running dash animation
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+
+      // Remove previous supplier/route/arrow layers if they exist
       if (m.getLayer('supplier-labels')) m.removeLayer('supplier-labels');
       if (m.getLayer('supplier-markers')) m.removeLayer('supplier-markers');
+      if (m.getLayer('route-arrows')) m.removeLayer('route-arrows');
       if (m.getLayer('route-lines')) m.removeLayer('route-lines');
       if (m.getSource('suppliers')) m.removeSource('suppliers');
+      if (m.getSource('route-arrow-points')) m.removeSource('route-arrow-points');
       if (m.getSource('routes')) m.removeSource('routes');
 
-      if (!selectedPlan) return;
+      if (!selectedPlan) {
+        siteDeliveryMapRef.current = null;
+        return;
+      }
 
       // Aggregate quantities per supplier
       const supplierAgg: Record<string, { coord: { lat: number; lng: number }; totalQty: number; items: string[] }> = {};
@@ -296,6 +353,28 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
           `${li.quantity_lbs.toLocaleString()} lbs ${li.food_category}`
         );
       }
+
+      // Pre-compute per-site delivery map for hover popups
+      const siteDeliveryMap = new Map<string, SiteDeliveryInfo>();
+      for (const li of selectedPlan.line_items) {
+        const coord = getSupplierCoord(li.supplier_name);
+        if (!coord) continue;
+        const nearestSite = findNearestSite(coord.lat, coord.lng, sitesRef.current);
+        if (!nearestSite) continue;
+        const existing = siteDeliveryMap.get(nearestSite.id);
+        if (existing) {
+          existing.totalLbs += li.quantity_lbs;
+          existing.suppliers.add(li.supplier_name);
+          existing.categories.add(li.food_category);
+        } else {
+          siteDeliveryMap.set(nearestSite.id, {
+            totalLbs: li.quantity_lbs,
+            suppliers: new Set([li.supplier_name]),
+            categories: new Set([li.food_category]),
+          });
+        }
+      }
+      siteDeliveryMapRef.current = siteDeliveryMap;
 
       const supplierFeatures: GeoJSON.Feature<GeoJSON.Point>[] = Object.entries(supplierAgg).map(
         ([name, { coord, totalQty, items }]) => ({
@@ -330,7 +409,29 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
         features: routeFeatures,
       };
 
-      // Add route lines (behind supplier markers)
+      // Build arrow point features at 85% along each route line
+      const arrowFeatures: GeoJSON.Feature<GeoJSON.Point>[] = routeFeatures.map((rf) => {
+        const coords = rf.geometry.coordinates;
+        const [sx, sy] = coords[0]; // supplier lng, lat
+        const [dx, dy] = coords[1]; // destination lng, lat
+        // Position at 85% along the line (close to destination)
+        const ax = sx + (dx - sx) * 0.85;
+        const ay = sy + (dy - sy) * 0.85;
+        // Bearing in degrees — Mapbox icon-rotate is CW from north
+        const bearing = (Math.atan2(dx - sx, dy - sy) * 180) / Math.PI;
+        return {
+          type: 'Feature' as const,
+          geometry: { type: 'Point' as const, coordinates: [ax, ay] },
+          properties: { bearing },
+        };
+      });
+
+      const arrowGeoJSON: GeoJSON.FeatureCollection<GeoJSON.Point> = {
+        type: 'FeatureCollection',
+        features: arrowFeatures,
+      };
+
+      // Add route lines (behind supplier markers) with initial dash pattern
       m.addSource('routes', { type: 'geojson', data: routeGeoJSON });
       m.addLayer({
         id: 'route-lines',
@@ -339,8 +440,64 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
         paint: {
           'line-color': '#60a5fa',
           'line-width': 1.5,
-          'line-dasharray': [4, 3],
+          'line-dasharray': DASH_SEQUENCE[0],
           'line-opacity': 0.6,
+        },
+      }, 'site-pulse');
+
+      // Start flowing-dash animation
+      let step = 0;
+      let lastTime = 0;
+      const animateDash = (timestamp: number) => {
+        if (timestamp - lastTime >= 60) {
+          lastTime = timestamp;
+          step = (step + 1) % DASH_SEQUENCE.length;
+          if (m.getLayer('route-lines')) {
+            m.setPaintProperty('route-lines', 'line-dasharray', DASH_SEQUENCE[step]);
+          }
+        }
+        animationRef.current = requestAnimationFrame(animateDash);
+      };
+      animationRef.current = requestAnimationFrame(animateDash);
+
+      // Add arrowhead image if not already present
+      if (!m.hasImage('route-arrow')) {
+        const arrowSize = 16;
+        const canvas = document.createElement('canvas');
+        canvas.width = arrowSize;
+        canvas.height = arrowSize;
+        const ctx = canvas.getContext('2d')!;
+        ctx.fillStyle = '#60a5fa';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(arrowSize, arrowSize / 2);
+        ctx.lineTo(0, arrowSize);
+        ctx.closePath();
+        ctx.fill();
+        const imageData = ctx.getImageData(0, 0, arrowSize, arrowSize);
+        m.addImage('route-arrow', {
+          width: arrowSize,
+          height: arrowSize,
+          data: new Uint8Array(imageData.data.buffer),
+        });
+      }
+
+      // Add arrow point source and symbol layer
+      m.addSource('route-arrow-points', { type: 'geojson', data: arrowGeoJSON });
+      m.addLayer({
+        id: 'route-arrows',
+        type: 'symbol',
+        source: 'route-arrow-points',
+        layout: {
+          'icon-image': 'route-arrow',
+          'icon-size': 0.7,
+          'icon-rotate': ['get', 'bearing'],
+          'icon-rotation-alignment': 'map',
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+        },
+        paint: {
+          'icon-opacity': 0.8,
         },
       }, 'site-pulse');
 
@@ -427,6 +584,11 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
     }
 
     return () => {
+      // Cancel dash animation on cleanup
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
       cleanupHandlers?.();
     };
   }, [selectedPlan]);
