@@ -209,3 +209,5 @@ export interface FollowupResponse {
   thread_id: string | null;
   chart_url?: string | null;
 }
+
+export type SelectedPlanState = ResponsePlan | null;

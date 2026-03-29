@@ -4,9 +4,9 @@ import { MapView } from './MapView';
 import { SiteDetailCard } from './SiteDetailCard';
 import { useSites } from '@/hooks/useSites';
 import { useSiteInventory } from '@/hooks/useSiteInventory';
-import type { Site } from '@/lib/types';
+import type { Site, ResponsePlan } from '@/lib/types';
 
-export function MapTab() {
+export function MapTab({ selectedPlan }: { selectedPlan?: ResponsePlan | null }) {
   const { sites, loading, error } = useSites();
   const [selectedSite, setSelectedSite] = useState<Site | null>(null);
   const { categoryTotals, loading: inventoryLoading } = useSiteInventory(

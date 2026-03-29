@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import type { ResponsePlan } from '@/lib/types';
 import { PlanCard } from '@/components/plans/PlanCard';
 import { HexDashboard } from '@/components/hex/HexDashboard';
@@ -11,6 +10,8 @@ interface PlansTabProps {
   hexPlansUrl: string | null;
   isStreaming: boolean;
   isComplete: boolean;
+  selectedPlanName: string | null;
+  onSelectPlan: (plan: ResponsePlan) => void;
 }
 
 export function PlansTab({
@@ -18,10 +19,9 @@ export function PlansTab({
   hexPlansUrl,
   isStreaming,
   isComplete,
+  selectedPlanName,
+  onSelectPlan,
 }: PlansTabProps) {
-  const [selectedPlan, setSelectedPlan] = useState<ResponsePlan['name'] | null>(
-    null,
-  );
 
   // TODO: Remove mock fallback when backend is ready
   const displayPlans = plans.length > 0 ? plans : MOCK_PLANS;
@@ -65,8 +65,8 @@ export function PlansTab({
             <PlanCard
               key={plan.name}
               plan={plan}
-              isSelected={selectedPlan === plan.name}
-              onSelect={(p) => setSelectedPlan(p.name)}
+              isSelected={selectedPlanName === plan.name}
+              onSelect={onSelectPlan}
             />
           ))}
         </div>
