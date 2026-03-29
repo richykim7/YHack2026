@@ -143,7 +143,7 @@ export function DashboardShell() {
           <FollowUpTab pipelineComplete={isComplete} />
         </div>
         <div key={activeTab === 'usage' ? `usage-${tabKey}` : 'usage'} className={activeTab === 'usage' ? 'h-full animate-tab-in' : 'hidden'}>
-          <UsageTab pipelineComplete={isComplete} />
+          <UsageTab pipelineComplete={isComplete} plans={plans} sources={sources} />
         </div>
       </main>
     </div>

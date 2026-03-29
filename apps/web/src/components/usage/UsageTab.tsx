@@ -3,13 +3,27 @@ import { useEffect } from 'react';
 import { DollarSign } from 'lucide-react';
 import { useLavaCosts } from '@/hooks/useLavaCosts';
 import { CostDonut } from './CostDonut';
-import { CostSparkline } from './CostSparkline';
+import { CostBarChart } from './CostSparkline';
+import { ImpactHero } from './ImpactHero';
+import { ModelBadge } from './ModelBadge';
+import type { ResponsePlan, SourceOption } from '@/lib/types';
+
+const AGENT_MODEL_MAP: Record<string, string> = {
+  monitor: 'Claude Sonnet 4',
+  scope: 'Claude Sonnet 4',
+  assess: 'Claude Sonnet 4',
+  discover: 'Claude Sonnet 4',
+  orchestrator: 'Gemini 2.0 Flash / GPT-4.1-mini',
+  optimize: 'Deterministic',
+};
 
 interface UsageTabProps {
   pipelineComplete?: boolean;
+  plans?: ResponsePlan[];
+  sources?: SourceOption[];
 }
 
-export function UsageTab({ pipelineComplete = false }: UsageTabProps) {
+export function UsageTab({ pipelineComplete = false, plans = [], sources = [] }: UsageTabProps) {
   const { costs, totalCost, gateway, loading, error, refetch } = useLavaCosts();
 
   // Refetch costs when pipeline completes (3s delay for Lava API processing)
@@ -22,10 +36,17 @@ export function UsageTab({ pipelineComplete = false }: UsageTabProps) {
 
   const totalRequests = costs.reduce((sum, c) => sum + c.requests, 0);
 
-  // Format cost: use 4 decimal places for sub-penny, 2 otherwise
-  const formattedCost = totalCost < 0.01 && totalCost > 0
-    ? `$${totalCost.toFixed(4)}`
-    : `$${totalCost.toFixed(2)}`;
+  // Compute impact metrics from plans and sources
+  const pipelineDurationMs = 45000; // Estimate ~45s for full pipeline
+  const peopleServed = plans.length > 0
+    ? Math.max(...plans.map(p => p.estimated_people_served))
+    : 0;
+  const suppliersIdentified = new Set(
+    plans.flatMap(p => p.line_items.map(li => li.supplier_name))
+  ).size || sources.length;
+  const categoriesCovered = new Set(
+    plans.flatMap(p => p.line_items.map(li => li.food_category))
+  ).size;
 
   // No Lava gateway -- show message per D-11
   if (!loading && gateway !== 'lava' && costs.length === 0) {
@@ -75,20 +96,31 @@ export function UsageTab({ pipelineComplete = false }: UsageTabProps) {
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-4">
-      {/* Hero: Total Pipeline Cost */}
-      <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 text-center">
-        <p className="text-xs font-display font-semibold text-slate-400 uppercase tracking-widest mb-2">
-          Total Pipeline Cost
-        </p>
-        <p className="text-4xl font-mono font-bold text-slate-100 tabular-nums">
-          {formattedCost}
-        </p>
-        <p className="text-sm text-slate-400 mt-1">
-          across {totalRequests} agent request{totalRequests !== 1 ? 's' : ''}
+      {/* 1. Impact Hero Strip */}
+      <ImpactHero
+        pipelineDurationMs={pipelineDurationMs}
+        peopleServed={peopleServed}
+        suppliersIdentified={suppliersIdentified}
+        categoriesCovered={categoriesCovered}
+        totalCost={totalCost}
+      />
+
+      {/* 2. AI Models Used */}
+      <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
+        <h2 className="text-sm font-display font-bold text-slate-300 uppercase tracking-widest mb-3">
+          AI Models Used
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          <ModelBadge model="Claude Sonnet 4" />
+          <ModelBadge model="Gemini 2.0 Flash" />
+          <ModelBadge model="GPT-4.1-mini" />
+        </div>
+        <p className="text-xs text-slate-500 mt-2">
+          Multi-provider pipeline via Lava Gateway for cost optimization and redundancy
         </p>
       </div>
 
-      {/* Charts: Donut + Sparkline */}
+      {/* 3. Charts: Donut + Bar Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
           <h2 className="text-sm font-display font-bold text-slate-300 uppercase tracking-widest mb-3">
@@ -98,13 +130,13 @@ export function UsageTab({ pipelineComplete = false }: UsageTabProps) {
         </div>
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
           <h2 className="text-sm font-display font-bold text-slate-300 uppercase tracking-widest mb-3">
-            Cumulative Cost
+            Cost per Agent
           </h2>
-          <CostSparkline costs={costs} />
+          <CostBarChart costs={costs} />
         </div>
       </div>
 
-      {/* Agent Details Table */}
+      {/* 4. Agent Details Table with Model column */}
       <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
         <h2 className="text-sm font-display font-bold text-slate-300 uppercase tracking-widest mb-3">
           Agent Details
@@ -116,6 +148,7 @@ export function UsageTab({ pipelineComplete = false }: UsageTabProps) {
             <thead>
               <tr className="border-b border-slate-700">
                 <th className="text-xs text-slate-400 uppercase text-left py-2 pr-4">Agent</th>
+                <th className="text-xs text-slate-400 uppercase text-left py-2 px-4">Model</th>
                 <th className="text-xs text-slate-400 uppercase text-right py-2 px-4">Cost</th>
                 <th className="text-xs text-slate-400 uppercase text-right py-2 px-4">Tokens</th>
                 <th className="text-xs text-slate-400 uppercase text-right py-2 pl-4">Requests</th>
@@ -125,10 +158,13 @@ export function UsageTab({ pipelineComplete = false }: UsageTabProps) {
               {costs.map((c) => (
                 <tr key={c.agent} className="border-b border-slate-700/50">
                   <td className="text-sm text-slate-200 py-2 pr-4 capitalize">{c.agent}</td>
+                  <td className="text-sm text-slate-300 py-2 px-4">
+                    {AGENT_MODEL_MAP[c.agent] || 'Unknown'}
+                  </td>
                   <td className="text-sm text-slate-200 tabular-nums text-right py-2 px-4">
                     ${c.cost.toFixed(4)}
                   </td>
-                  <td className="text-sm text-slate-200 tabular-nums text-right py-2 px-4">
+                  <td className="text-sm text-slate-500 tabular-nums text-right py-2 px-4">
                     {c.tokens.toLocaleString()}
                   </td>
                   <td className="text-sm text-slate-200 tabular-nums text-right py-2 pl-4">
@@ -139,6 +175,9 @@ export function UsageTab({ pipelineComplete = false }: UsageTabProps) {
             </tbody>
           </table>
         )}
+        <p className="text-xs text-slate-600 mt-3">
+          {totalRequests} total request{totalRequests !== 1 ? 's' : ''} across all agents
+        </p>
       </div>
     </div>
   );

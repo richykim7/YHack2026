@@ -1,42 +1,43 @@
 'use client';
-import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { AgentCost } from '@/lib/types';
 
-const AGENT_ORDER = ['scope', 'assess', 'discover', 'optimize'];
+const COLORS = ['#3b82f6', '#fbbf24', '#4ade80', '#a78bfa', '#f87171', '#38bdf8'];
 
-export function CostSparkline({ costs }: { costs: AgentCost[] }) {
-  // Build cumulative cost data from agent costs in pipeline order
-  let cumulative = 0;
-  const data = [{ agent: 'start', cumCost: 0 }];
-  for (const agentName of AGENT_ORDER) {
-    const c = costs.find(item => item.agent === agentName);
-    if (c) {
-      cumulative += c.cost;
-      data.push({ agent: agentName, cumCost: cumulative });
-    }
-  }
-  // Add any agents not in standard order
-  for (const c of costs) {
-    if (!AGENT_ORDER.includes(c.agent)) {
-      cumulative += c.cost;
-      data.push({ agent: c.agent, cumCost: cumulative });
-    }
-  }
+export function CostBarChart({ costs }: { costs: AgentCost[] }) {
+  const data = costs.map(c => ({ agent: c.agent, cost: c.cost }));
 
-  if (data.length <= 1) return null;
+  if (data.length === 0) return null;
 
   return (
-    <ResponsiveContainer width="100%" height={140}>
-      <LineChart data={data}>
-        <XAxis dataKey="agent" tick={{ fontSize: 11, fill: '#64748b' }} stroke="#334155" />
-        <YAxis tick={{ fontSize: 11, fill: '#64748b' }} stroke="#334155" tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
-        <Tooltip
-          formatter={(value) => `$${Number(value).toFixed(4)}`}
-          contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-          itemStyle={{ color: '#e2e8f0' }}
+    <ResponsiveContainer width="100%" height={200}>
+      <BarChart data={data} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+        <XAxis
+          dataKey="agent"
+          tick={{ fill: '#94a3b8', fontSize: 11 }}
+          axisLine={false}
+          tickLine={false}
         />
-        <Line type="monotone" dataKey="cumCost" stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6', r: 4 }} />
-      </LineChart>
+        <YAxis
+          tick={{ fill: '#64748b', fontSize: 10 }}
+          axisLine={false}
+          tickLine={false}
+          tickFormatter={(v: number) => `$${v.toFixed(3)}`}
+        />
+        <Tooltip
+          contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
+          labelStyle={{ color: '#e2e8f0' }}
+          formatter={(value) => [`$${Number(value).toFixed(4)}`, 'Cost']}
+        />
+        <Bar dataKey="cost" radius={[4, 4, 0, 0]}>
+          {data.map((_, i) => (
+            <Cell key={i} fill={COLORS[i % COLORS.length]} />
+          ))}
+        </Bar>
+      </BarChart>
     </ResponsiveContainer>
   );
 }
+
+// Keep old name as alias for backward compatibility
+export const CostSparkline = CostBarChart;
