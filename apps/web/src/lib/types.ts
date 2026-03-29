@@ -105,7 +105,8 @@ export type SSEEventType =
   // Orchestrator events (Phase 12)
   | 'orchestrator_start'
   | 'orchestrator_step'
-  | 'crisis_profile_ready';
+  | 'crisis_profile_ready'
+  | 'plan_accepted';
 
 export interface SSEEvent {
   type: SSEEventType;
@@ -132,6 +133,8 @@ export interface SSEEvent {
   // Orchestrator fields (Phase 12)
   step?: string;
   model?: string;
+  // Phase 14: Pipeline run tracking
+  pipeline_run_id?: string;
 }
 
 export type AgentStatus = 'pending' | 'running' | 'complete' | 'error';
@@ -193,6 +196,8 @@ export interface SourceOption {
   reliability_score: number;
   source_type: 'database' | 'web_search';
   notes: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface PlanLineItem {
@@ -203,6 +208,8 @@ export interface PlanLineItem {
   quantity_lbs: number;
   cost: number;
   lead_time_days: number;
+  delivery_cost?: number;
+  distance_miles?: number;
 }
 
 export interface ResponsePlan {
@@ -213,6 +220,7 @@ export interface ResponsePlan {
   coverage_pct: number;
   max_lead_time_days: number;
   estimated_people_served: number;
+  transfers?: TransferItem[];
 }
 
 export interface LavaCostBreakdown {
@@ -241,3 +249,43 @@ export interface FollowupResponse {
 }
 
 export type SelectedPlanState = ResponsePlan | null;
+
+// Phase 14: Plan acceptance types (from FRONTEND-HANDOFF.md)
+export interface TransferItem {
+  from_site_id: string;
+  from_site_name: string;
+  to_site_id: string;
+  to_site_name: string;
+  food_category: string;
+  quantity_lbs: number;
+  delivery_cost: number;
+  distance_miles: number;
+}
+
+export interface GeneratedDocument {
+  type: 'purchase_order' | 'transfer_request' | 'crisis_summary';
+  title: string;
+  supplier_name: string | null;
+  content_markdown: string;
+}
+
+export interface AcceptPlanResponse {
+  status: 'accepted';
+  plan_name: string;
+  line_items_reserved: number;
+  transfers_processed: number;
+  updated_health_scores: Record<string, number>;
+}
+
+export interface AuditEntry {
+  timestamp: number;
+  agent: string;
+  action: string;
+  model: string;
+  input_summary: string;
+  output_summary: string;
+  token_count: number;
+  cost_usd: number;
+  lava_request_id: string;
+  duration_ms: number;
+}

@@ -25,6 +25,7 @@ function getDefaultMessage(event: SSEEvent): string {
     case 'orchestrator_start': return event.message || 'Starting crisis analysis...';
     case 'orchestrator_step': return event.message || `Running ${event.step}...`;
     case 'crisis_profile_ready': return 'Crisis profile assembled. Launching pipeline.';
+    case 'plan_accepted': return 'Response plan accepted.';
     default: return '';
   }
 }
@@ -58,6 +59,7 @@ function eventToActivity(event: SSEEvent): AgentActivity {
     orchestrator_start: 'orchestrator',
     orchestrator_step: 'orchestrator',
     crisis_profile_ready: 'orchestrator',
+    plan_accepted: 'pipeline',
   };
 
   const statusMap: Record<string, AgentStatus> = {
@@ -87,6 +89,7 @@ function eventToActivity(event: SSEEvent): AgentActivity {
     orchestrator_start: 'running',
     orchestrator_step: 'running',
     crisis_profile_ready: 'complete',
+    plan_accepted: 'complete',
   };
 
   return {
@@ -112,6 +115,9 @@ export function useCrisisStream() {
   const [lavaCosts, setLavaCosts] = useState<LavaCostBreakdown | null>(null);
   const [gapAnalysis, setGapAnalysis] = useState<GapAnalysis | null>(null);
 
+  // Session ID (Phase 14)
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
   // Monitor state (Phase 12)
   const [monitorPosts, setMonitorPosts] = useState<MonitorPost[]>([]);
   const [classifications, setClassifications] = useState<Map<string, MonitorClassification>>(new Map());
@@ -119,7 +125,9 @@ export function useCrisisStream() {
   const [monitorMode, setMonitorMode] = useState<'idle' | 'monitoring' | 'pipeline'>('idle');
 
   const launchAndStream = useCallback(
-    async (sessionId: string, crisisProfile: Record<string, unknown>) => {
+    async (sid: string, crisisProfile: Record<string, unknown>) => {
+      setSessionId(sid);
+      const sessionId = sid;
       // Step 1: Launch pipeline via POST
       await postJSON('/api/crisis/launch', {
         session_id: sessionId,
@@ -218,6 +226,7 @@ export function useCrisisStream() {
   const startMonitorAndStream = useCallback(async () => {
     // Generate session ID
     const sessionId = crypto.randomUUID();
+    setSessionId(sessionId);
 
     // Reset all state
     setMonitorMode('monitoring');
@@ -342,6 +351,8 @@ export function useCrisisStream() {
   return {
     events, isStreaming, isComplete, launchAndStream, stopStream,
     sources, plans, hexPlansUrl, hexAssessUrl, lavaCosts, gapAnalysis,
+    // Session ID (Phase 14)
+    sessionId,
     // Monitor state (Phase 12)
     monitorPosts, classifications, crisisDetected, monitorMode,
     startMonitorAndStream,

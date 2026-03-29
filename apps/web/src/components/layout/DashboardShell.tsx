@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import type { TabId, ResponsePlan, SelectedPlanState, MonitorPost, MonitorClassification } from '@/lib/types';
+import type { TabId, ResponsePlan, SelectedPlanState, AcceptPlanResponse } from '@/lib/types';
+import { postJSON } from '@/lib/api';
 import { DashboardHeader } from './DashboardHeader';
 import { TabNavigation } from './TabNavigation';
 import { DashboardTab } from '@/components/dashboard/DashboardTab';
@@ -18,10 +19,12 @@ export function DashboardShell() {
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [tabKey, setTabKey] = useState(0);
   const {
-    events, isStreaming, isComplete, launchAndStream, plans, hexPlansUrl, hexAssessUrl, gapAnalysis,
+    events, isStreaming, isComplete, launchAndStream, plans, sources, hexPlansUrl, hexAssessUrl, gapAnalysis,
+    sessionId,
     monitorPosts, classifications, crisisDetected, monitorMode, startMonitorAndStream,
   } = useCrisisStream();
   const [selectedPlan, setSelectedPlan] = useState<SelectedPlanState>(null);
+  const [acceptedPlanName, setAcceptedPlanName] = useState<string | null>(null);
   const [orchestratorSteps, setOrchestratorSteps] = useState<{ step: string; model: string; message: string }[]>([]);
   const { refetch: refetchCosts } = useLavaCosts();
 
@@ -44,6 +47,27 @@ export function DashboardShell() {
     setActiveTab('map');
     setTabKey(k => k + 1);
   }, []);
+
+  const handleAcceptPlan = useCallback(async (plan: ResponsePlan) => {
+    try {
+      await postJSON<AcceptPlanResponse>('/api/plans/accept', {
+        crisis_event_id: sessionId,
+        plan,
+        target_site_id: '',
+      });
+      setAcceptedPlanName(plan.name);
+      setSelectedPlan(plan);
+      setActiveTab('map');
+      setTabKey(k => k + 1);
+    } catch (err) {
+      // Backend may not exist yet -- do frontend-only state change
+      console.warn('Plan accept API not available, applying frontend-only state:', err);
+      setAcceptedPlanName(plan.name);
+      setSelectedPlan(plan);
+      setActiveTab('map');
+      setTabKey(k => k + 1);
+    }
+  }, [sessionId]);
 
   // Refetch Lava costs after pipeline completes
   useEffect(() => {
@@ -110,6 +134,9 @@ export function DashboardShell() {
             isComplete={isComplete}
             selectedPlanName={selectedPlan?.name ?? null}
             onSelectPlan={handleSelectPlan}
+            acceptedPlanName={acceptedPlanName}
+            onAcceptPlan={handleAcceptPlan}
+            sessionId={sessionId}
           />
         </div>
         <div key={activeTab === 'followup' ? `followup-${tabKey}` : 'followup'} className={activeTab === 'followup' ? 'h-full animate-tab-in' : 'hidden'}>
