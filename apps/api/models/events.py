@@ -70,6 +70,7 @@ class AssessCompleteEvent(BaseModel):
     type: Literal["assess_complete"] = "assess_complete"
     gap_analysis: dict  # GapAnalysis serialized
     timestamp: float
+    pipeline_run_id: str = ""
 
 
 class HexAssessReadyEvent(BaseModel):
@@ -97,6 +98,7 @@ class DiscoverCompleteEvent(BaseModel):
     sources: list[dict]  # SourceOption[] serialized
     total_count: int
     timestamp: float
+    pipeline_run_id: str = ""
 
 
 class OptimizeStartEvent(BaseModel):
@@ -108,6 +110,7 @@ class PlansReadyEvent(BaseModel):
     type: Literal["plans_ready"] = "plans_ready"
     plans: list[dict]  # ResponsePlan[] serialized
     timestamp: float
+    pipeline_run_id: str = ""
 
 
 class HexPlansReadyEvent(BaseModel):
@@ -119,12 +122,21 @@ class HexPlansReadyEvent(BaseModel):
 class PipelineCompleteEvent(BaseModel):
     type: Literal["pipeline_complete"] = "pipeline_complete"
     timestamp: float
+    pipeline_run_id: str = ""
+
+
+class PlanAcceptedEvent(BaseModel):
+    type: Literal["plan_accepted"] = "plan_accepted"
+    plan_name: str
+    crisis_event_id: str
+    timestamp: float
 
 
 class LavaUsageEvent(BaseModel):
     type: Literal["lava_usage"] = "lava_usage"
     costs: dict  # LavaCostBreakdown serialized
     timestamp: float
+    pipeline_run_id: str = ""
 
 
 # === Monitor agent events (Phase 9) ===
@@ -190,6 +202,7 @@ SSEEvent = Union[
     PlansReadyEvent,
     HexPlansReadyEvent,
     PipelineCompleteEvent,
+    PlanAcceptedEvent,
     LavaUsageEvent,
     MonitorPostEvent,
     MonitorClassificationEvent,
@@ -207,7 +220,7 @@ ALL_EVENT_TYPES = [
     "hex_assess_ready",
     "discover_start", "source_found", "discover_complete",
     "optimize_start", "plans_ready", "hex_plans_ready",
-    "pipeline_complete", "lava_usage",
+    "pipeline_complete", "plan_accepted", "lava_usage",
     "monitor_post", "monitor_classification", "crisis_detected",
     "orchestrator_start", "orchestrator_step", "crisis_profile_ready",
 ]

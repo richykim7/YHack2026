@@ -107,7 +107,7 @@ def _query_supplier_catalog(
         # suppliers columns: id, name, reliability_score, typical_lead_time_hours
         response = (
             supabase.table("supplier_catalog")
-            .select("*, suppliers(name, reliability_score, typical_lead_time_hours)")
+            .select("*, suppliers(name, reliability_score, typical_lead_time_hours, lat, lng)")
             .in_("food_category", categories)
             .order("price_per_lb", desc=False)
             .execute()
@@ -149,6 +149,10 @@ def _row_to_source_option(row: dict) -> SourceOption | None:
         reliability = float(supplier_info.get("reliability_score", 0.5)) if isinstance(supplier_info, dict) else 0.5
         lead_time_hours = int(supplier_info.get("typical_lead_time_hours", 48)) if isinstance(supplier_info, dict) else 48
 
+        # Extract supplier coordinates for delivery cost calculations
+        lat = float(supplier_info.get("lat", 0)) if isinstance(supplier_info, dict) and supplier_info.get("lat") else None
+        lng = float(supplier_info.get("lng", 0)) if isinstance(supplier_info, dict) and supplier_info.get("lng") else None
+
         item_name = row.get("subcategory", "Unknown Item")
         slug = f"{supplier_name}-{item_name}".lower().replace(" ", "-")
 
@@ -165,6 +169,8 @@ def _row_to_source_option(row: dict) -> SourceOption | None:
             reliability_score=reliability,
             source_type="database",
             notes=row.get("notes", ""),
+            latitude=lat,
+            longitude=lng,
         )
     except Exception as e:
         logger.warning("Failed to map supplier_catalog row: %s", e)
