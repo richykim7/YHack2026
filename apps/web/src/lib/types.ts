@@ -60,6 +60,21 @@ export interface CrisisProfile {
   description: string;          // default "" in backend
 }
 
+// Phase 12: Monitor types
+export interface MonitorPost {
+  id: string;
+  source: 'twitter' | 'news' | 'community_alert';
+  author: string;
+  content: string;
+  timestamp: number;
+}
+
+export interface MonitorClassification {
+  relevant: boolean;
+  confidence: number;
+  reason: string;
+}
+
 // Phase 2+4: SSE & Activity types
 export type SSEEventType =
   // Existing (Phase 2-3)
@@ -82,7 +97,15 @@ export type SSEEventType =
   | 'plans_ready'
   | 'hex_plans_ready'
   | 'pipeline_complete'
-  | 'lava_usage';
+  | 'lava_usage'
+  // Monitor events (Phase 12)
+  | 'monitor_post'
+  | 'monitor_classification'
+  | 'crisis_detected'
+  // Orchestrator events (Phase 12)
+  | 'orchestrator_start'
+  | 'orchestrator_step'
+  | 'crisis_profile_ready';
 
 export interface SSEEvent {
   type: SSEEventType;
@@ -102,6 +125,13 @@ export interface SSEEvent {
   total_count?: number;                // discover_complete
   plans?: ResponsePlan[];              // plans_ready
   costs?: LavaCostBreakdown;           // lava_usage
+  // Monitor fields (Phase 12)
+  post?: MonitorPost;
+  post_id?: string;
+  classification?: MonitorClassification;
+  // Orchestrator fields (Phase 12)
+  step?: string;
+  model?: string;
 }
 
 export type AgentStatus = 'pending' | 'running' | 'complete' | 'error';
