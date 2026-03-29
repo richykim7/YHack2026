@@ -68,10 +68,11 @@ async def run_assess(profile: CrisisProfile, background_tasks: BackgroundTasks):
                 HEX_ASSESS_PROJECT_ID,
                 {
                     "crisis_type": profile.crisis_type,
-                    "affected_area": profile.geography,
-                    "demand_delta_pct": profile.demand_delta_pct,
+                    "geography": profile.geography,
+                    "severity": profile.severity,
                     "timeline_days": profile.timeline_days,
-                    "population_affected": profile.affected_population,
+                    "demand_delta_pct": profile.demand_delta_pct,
+                    "affected_population": profile.affected_population,
                 },
             )
             hex_run = HexRunResult(

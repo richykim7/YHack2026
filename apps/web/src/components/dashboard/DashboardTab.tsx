@@ -11,9 +11,10 @@ import type { Site } from '@/lib/types';
 interface DashboardTabProps {
   onLaunchPipeline?: (sessionId: string, crisisProfile: Record<string, unknown>) => void;
   isStreaming?: boolean;
+  pipelineComplete?: boolean;
 }
 
-export function DashboardTab({ onLaunchPipeline, isStreaming }: DashboardTabProps) {
+export function DashboardTab({ onLaunchPipeline, isStreaming, pipelineComplete }: DashboardTabProps) {
   const { sites } = useSites();
   const [selectedSite, setSelectedSite] = useState<Site | null>(null);
 
@@ -66,6 +67,7 @@ export function DashboardTab({ onLaunchPipeline, isStreaming }: DashboardTabProp
       <ChatSidebar
         onLaunchPipeline={onLaunchPipeline}
         pipelineStreaming={isStreaming}
+        pipelineComplete={pipelineComplete}
       />
     </div>
   );

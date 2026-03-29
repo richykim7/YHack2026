@@ -1,24 +1,42 @@
 'use client';
 import { useState, useRef, useEffect, FormEvent } from 'react';
-import { MessageCircle, Send, Zap, User, Bot } from 'lucide-react';
+import { MessageCircle, Send, ExternalLink, Zap, User, Bot } from 'lucide-react';
 import { useScopeChat } from '@/hooks/useScopeChat';
 import { CrisisProfileCard } from './CrisisProfileCard';
 
 interface ChatSidebarProps {
   onLaunchPipeline?: (sessionId: string, crisisProfile: Record<string, unknown>) => void;
   pipelineStreaming?: boolean;
+  pipelineComplete?: boolean;
 }
 
-export function ChatSidebar({ onLaunchPipeline, pipelineStreaming }: ChatSidebarProps) {
-  const { messages, isLoading, crisisProfile, sendMessage, sessionId } = useScopeChat();
+export function ChatSidebar({ onLaunchPipeline, pipelineStreaming, pipelineComplete }: ChatSidebarProps) {
+  const {
+    messages,
+    isLoading,
+    crisisProfile,
+    followUpMode,
+    sendMessage,
+    enableFollowUp,
+    sessionId,
+  } = useScopeChat();
   const [input, setInput] = useState('');
   const [pipelineLaunched, setPipelineLaunched] = useState(false);
+  const followUpEnabled = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
+
+  // Enable follow-up mode when pipeline completes
+  useEffect(() => {
+    if (pipelineComplete && !followUpEnabled.current) {
+      followUpEnabled.current = true;
+      enableFollowUp();
+    }
+  }, [pipelineComplete, enableFollowUp]);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -43,12 +61,20 @@ export function ChatSidebar({ onLaunchPipeline, pipelineStreaming }: ChatSidebar
       {/* Header */}
       <div className="px-4 py-4 border-b border-slate-700/80">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-md bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
-            <Zap size={14} className="text-blue-400" />
+          <div className={`w-7 h-7 rounded-md border flex items-center justify-center ${
+            followUpMode
+              ? 'bg-emerald-500/20 border-emerald-500/30'
+              : 'bg-blue-500/20 border-blue-500/30'
+          }`}>
+            <Zap size={14} className={followUpMode ? 'text-emerald-400' : 'text-blue-400'} />
           </div>
           <div>
-            <h2 className="text-sm font-display font-bold text-slate-100 tracking-wide">SCOPE Agent</h2>
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Crisis analysis</p>
+            <h2 className="text-sm font-display font-bold text-slate-100 tracking-wide">
+              {followUpMode ? 'Follow-up' : 'SCOPE Agent'}
+            </h2>
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+              {followUpMode ? 'Hex Threads' : 'Crisis analysis'}
+            </p>
           </div>
         </div>
       </div>
@@ -102,6 +128,17 @@ export function ChatSidebar({ onLaunchPipeline, pipelineStreaming }: ChatSidebar
                   pipelineLaunched={!!isLaunched}
                 />
               )}
+              {msg.threadUrl && (
+                <a
+                  href={msg.threadUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 text-emerald-300 text-xs font-medium rounded-md hover:bg-emerald-500/30 transition-colors"
+                >
+                  <ExternalLink size={12} />
+                  Open in Hex Threads
+                </a>
+              )}
             </div>
           </div>
         ))}
@@ -113,11 +150,15 @@ export function ChatSidebar({ onLaunchPipeline, pipelineStreaming }: ChatSidebar
               <Bot size={12} className="text-emerald-400" />
             </div>
             <div className="bg-slate-800/80 border border-slate-700/60 rounded-xl rounded-tl-sm px-3 py-2">
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
+              {followUpMode ? (
+                <span className="text-sm text-slate-400 animate-pulse">Routing to Hex Threads...</span>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -132,7 +173,11 @@ export function ChatSidebar({ onLaunchPipeline, pipelineStreaming }: ChatSidebar
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
-            placeholder="Describe a crisis..."
+            placeholder={
+              followUpMode
+                ? 'Ask about the data...'
+                : 'Describe a crisis...'
+            }
             className="flex-1 bg-slate-800 text-slate-200 text-sm rounded-xl px-4 py-2.5 border border-slate-700 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/50 transition-shadow"
           />
           <button

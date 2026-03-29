@@ -3,7 +3,7 @@ import logging
 import time
 from typing import Dict
 
-from models.crisis import CrisisProfile
+from models.crisis import CrisisProfile, SourceOption
 from models.assess import GapAnalysis
 from models.events import (
     AgentStartEvent,
@@ -24,8 +24,12 @@ from models.events import (
 from services.gap_analysis import compute_gap_locally
 from services.hex_client import (
     HEX_ASSESS_PROJECT_ID,
+    HEX_PLANS_PROJECT_ID,
     trigger_hex_run,
+    trigger_plans_run,
 )
+from agents.discover_agent import discover_sources
+from services.optimize import generate_plans
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +92,11 @@ async def _run_assess_stage(queue: asyncio.Queue, profile: CrisisProfile) -> Gap
                 HEX_ASSESS_PROJECT_ID,
                 {
                     "crisis_type": profile.crisis_type,
-                    "affected_area": profile.geography,
-                    "demand_delta_pct": profile.demand_delta_pct,
+                    "geography": profile.geography,
+                    "severity": profile.severity,
                     "timeline_days": profile.timeline_days,
-                    "population_affected": profile.affected_population,
+                    "demand_delta_pct": profile.demand_delta_pct,
+                    "affected_population": profile.affected_population,
                 },
             )
             await _emit(queue, HexAssessReadyEvent(
@@ -105,53 +110,45 @@ async def _run_assess_stage(queue: asyncio.Queue, profile: CrisisProfile) -> Gap
 
 
 async def _run_discover_stage(queue: asyncio.Queue, gap: GapAnalysis, profile: CrisisProfile) -> list[dict]:
-    """Stage 3: DISCOVER -- find sourcing options.
-
-    TODO (Phase 5): Replace with real DISCOVER agent that:
-    1. Queries supplier_catalog table matching gap categories
-    2. Searches Tavily for emergency/alternative sources
-    3. Merges and deduplicates results into SourceOption[]
-    """
+    """Stage 3: DISCOVER -- find sourcing options via DB + Tavily."""
     await _emit(queue, DiscoverStartEvent(timestamp=time.time()))
 
-    # Phase 5 replaces this block with real discover logic
-    sources: list[dict] = []
-    logger.info("DISCOVER stage: Phase 5 will implement real sourcing logic")
+    async def on_found(src: SourceOption) -> None:
+        await _emit(queue, SourceFoundEvent(source=src.model_dump(), timestamp=time.time()))
+
+    sources = await discover_sources(gap, profile, on_source_found=on_found)
+    source_dicts = [s.model_dump() for s in sources]
 
     await _emit(queue, DiscoverCompleteEvent(
-        sources=sources,
-        total_count=len(sources),
+        sources=source_dicts,
+        total_count=len(source_dicts),
         timestamp=time.time(),
     ))
-    return sources
+    return source_dicts
 
 
 async def _run_optimize_stage(queue: asyncio.Queue, gap: GapAnalysis, sources: list[dict], profile: CrisisProfile) -> list[dict]:
-    """Stage 4: OPTIMIZE -- generate 3 response plans.
-
-    TODO (Phase 5): Replace with real OPTIMIZE function that:
-    1. Takes GapAnalysis + SourceOption[] as input
-    2. Runs greedy algorithm for 3 strategies: fastest, cheapest, best_nutrition
-    3. Returns ResponsePlan[] with line items, costs, coverage
-    """
+    """Stage 4: OPTIMIZE -- generate 3 response plans + trigger Hex Plans."""
     await _emit(queue, OptimizeStartEvent(timestamp=time.time()))
 
-    # Phase 5 replaces this block with real optimization logic
-    plans: list[dict] = []
-    logger.info("OPTIMIZE stage: Phase 5 will implement real optimization logic")
+    source_objs = [SourceOption(**s) for s in sources]
+    plans = generate_plans(gap, source_objs, profile)
+    plan_dicts = [p.model_dump() for p in plans]
 
     await _emit(queue, PlansReadyEvent(
-        plans=plans,
+        plans=plan_dicts,
         timestamp=time.time(),
     ))
 
-    # Hex Plans trigger (Phase 5 adds real trigger)
-    # HEX_PLANS_PROJECT_ID = os.environ.get("HEX_PLANS_PROJECT_ID", "")
-    # if HEX_PLANS_PROJECT_ID and plans:
-    #     result = await trigger_hex_run(HEX_PLANS_PROJECT_ID, {"plan_data_json": json.dumps(plans), ...})
-    #     await _emit(queue, HexPlansReadyEvent(run_url=result["run_url"], timestamp=time.time()))
+    # Hex Plans trigger (non-blocking -- skip on failure per D-14)
+    if HEX_PLANS_PROJECT_ID and plan_dicts:
+        try:
+            result = await trigger_plans_run(plan_dicts, profile.model_dump())
+            await _emit(queue, HexPlansReadyEvent(run_url=result["run_url"], timestamp=time.time()))
+        except Exception as e:
+            logger.warning("Hex Plans trigger failed: %s", e)
 
-    return plans
+    return plan_dicts
 
 
 async def run_pipeline(session_id: str, crisis_profile: dict):

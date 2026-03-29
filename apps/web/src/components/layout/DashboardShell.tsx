@@ -6,8 +6,8 @@ import { TabNavigation } from './TabNavigation';
 import { DashboardTab } from '@/components/dashboard/DashboardTab';
 import { MapTab } from '@/components/map/MapTab';
 import { AssessmentTab } from '@/components/assessment/AssessmentTab';
-import { PlansTab } from '@/components/plans/PlansTab';
-import { FollowUpTab } from '@/components/followup/FollowUpTab';
+import { PlansTab } from '@/components/placeholders/PlansTab';
+import { FollowUpTab } from '@/components/placeholders/FollowUpTab';
 import { UsageTab } from '@/components/usage/UsageTab';
 import { useCrisisStream } from '@/hooks/useCrisisStream';
 import { API_BASE } from '@/lib/api';
@@ -15,9 +15,8 @@ import { API_BASE } from '@/lib/api';
 export function DashboardShell() {
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [tabKey, setTabKey] = useState(0);
-  const { events, isStreaming, isComplete, launchAndStream, plans, hexPlansUrl } =
+  const { events, isStreaming, isComplete, launchAndStream } =
     useCrisisStream();
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [gapAnalysis, setGapAnalysis] = useState<GapAnalysis | null>(null);
   const [hexRunUrl, setHexRunUrl] = useState<string | null>(null);
   const crisisProfileRef = useRef<Record<string, unknown> | null>(null);
@@ -29,7 +28,6 @@ export function DashboardShell() {
 
   const handleLaunch = useCallback(
     async (sessionId: string, crisisProfile: Record<string, unknown>) => {
-      setSessionId(sessionId);
       crisisProfileRef.current = crisisProfile;
       await launchAndStream(sessionId, crisisProfile);
     },
@@ -67,6 +65,7 @@ export function DashboardShell() {
           <DashboardTab
             onLaunchPipeline={handleLaunch}
             isStreaming={isStreaming}
+            pipelineComplete={isComplete}
           />
         </div>
         <div key={activeTab === 'map' ? `map-${tabKey}` : 'map'} className={activeTab === 'map' ? 'h-full animate-tab-in' : 'hidden'}>
@@ -82,10 +81,10 @@ export function DashboardShell() {
           />
         </div>
         <div key={activeTab === 'plans' ? `plans-${tabKey}` : 'plans'} className={activeTab === 'plans' ? 'h-full animate-tab-in' : 'hidden'}>
-          <PlansTab plans={plans} hexPlansUrl={hexPlansUrl} isStreaming={isStreaming} isComplete={isComplete} />
+          <PlansTab />
         </div>
         <div key={activeTab === 'followup' ? `followup-${tabKey}` : 'followup'} className={activeTab === 'followup' ? 'h-full animate-tab-in' : 'hidden'}>
-          <FollowUpTab isComplete={isComplete} sessionId={sessionId} />
+          <FollowUpTab pipelineComplete={isComplete} />
         </div>
         <div key={activeTab === 'usage' ? `usage-${tabKey}` : 'usage'} className={activeTab === 'usage' ? 'h-full animate-tab-in' : 'hidden'}>
           <UsageTab />
