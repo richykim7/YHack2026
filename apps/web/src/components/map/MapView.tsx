@@ -340,14 +340,17 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
     let cleanupHandlers: (() => void) | null = null;
 
     const applyOverlays = () => {
-      // Remove previous supplier/route/arrow layers if they exist
-      if (m.getLayer('supplier-labels')) m.removeLayer('supplier-labels');
-      if (m.getLayer('supplier-markers')) m.removeLayer('supplier-markers');
-      if (m.getLayer('route-arrows')) m.removeLayer('route-arrows');
-      if (m.getLayer('route-lines-delivery')) m.removeLayer('route-lines-delivery');
-      if (m.getLayer('route-lines-transfer')) m.removeLayer('route-lines-transfer');
-      if (m.getSource('suppliers')) m.removeSource('suppliers');
-      if (m.getSource('routes')) m.removeSource('routes');
+      // Remove previous supplier/route/dot layers if they exist
+      for (const layerId of [
+        'supplier-labels', 'supplier-markers',
+        'flow-dots-core', 'flow-dots-glow',
+        'route-lines-delivery', 'route-lines-transfer',
+      ]) {
+        if (m.getLayer(layerId)) m.removeLayer(layerId);
+      }
+      for (const sourceId of ['suppliers', 'routes', 'flow-dots']) {
+        if (m.getSource(sourceId)) m.removeSource(sourceId);
+      }
 
       if (!selectedPlan) {
         siteDeliveryMapRef.current = null;
@@ -442,7 +445,7 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
       // Add route lines (behind supplier markers) — bezier arcs with width encoding
       m.addSource('routes', { type: 'geojson', data: routeGeoJSON });
 
-      // Delivery routes (teal)
+      // Delivery routes — faint base line
       m.addLayer({
         id: 'route-lines-delivery',
         type: 'line',
@@ -450,14 +453,13 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
         filter: ['==', ['get', 'route_type'], 'delivery'],
         paint: {
           'line-color': '#2dd4bf',
-          'line-width': ['interpolate', ['linear'], ['get', 'quantity_lbs'], 500, 2, 5000, 4, 10000, 7],
-          'line-dasharray': [4, 3],
-          'line-opacity': 0.7,
+          'line-width': ['interpolate', ['linear'], ['get', 'quantity_lbs'], 500, 1.5, 5000, 3, 10000, 5],
+          'line-opacity': 0.15,
         },
         layout: { 'line-cap': 'round', 'line-join': 'round' },
       }, 'site-pulse');
 
-      // Transfer routes (amber)
+      // Transfer routes — faint base line
       m.addLayer({
         id: 'route-lines-transfer',
         type: 'line',
@@ -465,60 +467,134 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
         filter: ['==', ['get', 'route_type'], 'transfer'],
         paint: {
           'line-color': '#fbbf24',
-          'line-width': ['interpolate', ['linear'], ['get', 'quantity_lbs'], 500, 2, 5000, 4, 10000, 7],
-          'line-dasharray': [6, 4],
-          'line-opacity': 0.7,
+          'line-width': ['interpolate', ['linear'], ['get', 'quantity_lbs'], 500, 1.5, 5000, 3, 10000, 5],
+          'line-opacity': 0.15,
         },
         layout: { 'line-cap': 'round', 'line-join': 'round' },
       }, 'site-pulse');
 
-      // Animated dash flow
-      let animFrameId = 0;
-      let dashStep = 0;
-      function animateDash() {
-        dashStep++;
-        if (!m || dashStep % 3 !== 0) {
-          animFrameId = requestAnimationFrame(animateDash);
-          return;
-        }
-        const phase = (dashStep / 3) % 20;
-        try {
-          if (m.getLayer('route-lines-delivery')) {
-            m.setPaintProperty('route-lines-delivery', 'line-dasharray', [
-              4, Math.max(1, 3 + Math.sin(phase * 0.3) * 1.5)
-            ]);
-          }
-          if (m.getLayer('route-lines-transfer')) {
-            m.setPaintProperty('route-lines-transfer', 'line-dasharray', [
-              6, Math.max(1, 4 + Math.sin(phase * 0.3) * 2)
-            ]);
-          }
-        } catch { /* layer may not exist */ }
-        animFrameId = requestAnimationFrame(animateDash);
-      }
-      animateDash();
+      // --- Animated flowing dots along routes ---
 
-      // Add chevron arrows along delivery route lines to show direction of flow
+      // Compute arc length of a coordinate path (in degrees, good enough for relative comparison)
+      function pathLength(coords: [number, number][]): number {
+        let len = 0;
+        for (let i = 1; i < coords.length; i++) {
+          const dx = coords[i][0] - coords[i - 1][0];
+          const dy = coords[i][1] - coords[i - 1][1];
+          len += Math.sqrt(dx * dx + dy * dy);
+        }
+        return len;
+      }
+
+      // Pre-compute route metadata: path coords, length, dot count, cycle duration
+      const SPEED = 0.015; // degrees per second — constant across all routes
+      const DOT_SPACING = 0.04; // degrees between dots — shorter paths get fewer dots
+      const MIN_DOTS = 2;
+      const MAX_DOTS = 6;
+
+      const routeMeta: { coords: [number, number][]; type: string; len: number; dotCount: number; cycleMs: number }[] =
+        routeFeatures.map(f => {
+          const coords = f.geometry.coordinates as [number, number][];
+          const type = (f.properties?.route_type as string) ?? 'delivery';
+          const len = pathLength(coords);
+          const cycleMs = (len / SPEED) * 1000; // time for one full traversal
+          const dotCount = Math.max(MIN_DOTS, Math.min(MAX_DOTS, Math.round(len / DOT_SPACING)));
+          return { coords, type, len, dotCount, cycleMs };
+        });
+
+      // Build dot features — variable count per route
+      const dotFeatures: GeoJSON.Feature<GeoJSON.Point>[] = [];
+      const dotRouteIndex: { route: number; dotIdx: number }[] = []; // maps flat index to route+dot
+      for (let r = 0; r < routeMeta.length; r++) {
+        for (let d = 0; d < routeMeta[r].dotCount; d++) {
+          dotFeatures.push({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: routeMeta[r].coords[0] },
+            properties: { routeType: routeMeta[r].type },
+          });
+          dotRouteIndex.push({ route: r, dotIdx: d });
+        }
+      }
+
+      const dotGeoJSON: GeoJSON.FeatureCollection<GeoJSON.Point> = {
+        type: 'FeatureCollection',
+        features: dotFeatures,
+      };
+
+      m.addSource('flow-dots', { type: 'geojson', data: dotGeoJSON });
+
+      // Glow layer (larger, blurred)
       m.addLayer({
-        id: 'route-arrows',
-        type: 'symbol',
-        source: 'routes',
-        filter: ['==', ['get', 'route_type'], 'delivery'],
-        layout: {
-          'symbol-placement': 'line',
-          'symbol-spacing': 80,
-          'text-field': '\u203A',
-          'text-size': 18,
-          'text-keep-upright': false,
-          'text-rotation-alignment': 'map',
-          'text-allow-overlap': true,
-          'text-ignore-placement': true,
-        },
+        id: 'flow-dots-glow',
+        type: 'circle',
+        source: 'flow-dots',
         paint: {
-          'text-color': '#2dd4bf',
-          'text-opacity': 0.7,
+          'circle-radius': 6,
+          'circle-color': [
+            'case',
+            ['==', ['get', 'routeType'], 'transfer'], '#fbbf24',
+            '#2dd4bf',
+          ],
+          'circle-opacity': 0.4,
+          'circle-blur': 1,
         },
       });
+
+      // Core dot layer (bright, small)
+      m.addLayer({
+        id: 'flow-dots-core',
+        type: 'circle',
+        source: 'flow-dots',
+        paint: {
+          'circle-radius': 3,
+          'circle-color': [
+            'case',
+            ['==', ['get', 'routeType'], 'transfer'], '#fbbf24',
+            '#2dd4bf',
+          ],
+          'circle-opacity': 0.9,
+        },
+      });
+
+      // Animate dots along paths — constant speed, variable dot count
+      let animFrameId = 0;
+      const startTime = performance.now();
+
+      function animateDots(now: number) {
+        if (!m) return;
+        const elapsed = now - startTime;
+        const dotSource = m.getSource('flow-dots') as mapboxgl.GeoJSONSource | undefined;
+        if (!dotSource) {
+          animFrameId = requestAnimationFrame(animateDots);
+          return;
+        }
+
+        for (let i = 0; i < dotFeatures.length; i++) {
+          const { route: r, dotIdx: d } = dotRouteIndex[i];
+          const meta = routeMeta[r];
+          const path = meta.coords;
+          const segCount = path.length - 1;
+
+          // Stagger dots evenly within the cycle
+          const offset = d / meta.dotCount;
+          const t = ((elapsed / meta.cycleMs + offset) % 1);
+
+          // Interpolate position along path
+          const exact = t * segCount;
+          const segIdx = Math.min(Math.floor(exact), segCount - 1);
+          const frac = exact - segIdx;
+          const a = path[segIdx];
+          const b = path[segIdx + 1];
+          dotFeatures[i].geometry.coordinates = [
+            a[0] + (b[0] - a[0]) * frac,
+            a[1] + (b[1] - a[1]) * frac,
+          ];
+        }
+
+        dotSource.setData(dotGeoJSON);
+        animFrameId = requestAnimationFrame(animateDots);
+      }
+      animFrameId = requestAnimationFrame(animateDots);
 
       // Add supplier markers
       m.addSource('suppliers', { type: 'geojson', data: supplierGeoJSON });

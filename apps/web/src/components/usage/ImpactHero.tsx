@@ -1,9 +1,9 @@
 'use client';
 import { Clock, Users, Package, DollarSign } from 'lucide-react';
+import { useNetworkStats } from '@/hooks/useNetworkStats';
 
 interface ImpactHeroProps {
   pipelineDurationMs?: number;
-  peopleServed?: number;
   suppliersIdentified?: number;
   categoriesCovered?: number;
   totalCost: number;
@@ -32,13 +32,19 @@ function StatCard({ icon, label, value, sub, accent = 'text-slate-100' }: StatCa
   );
 }
 
+function fmt(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
+}
+
 export function ImpactHero({
   pipelineDurationMs,
-  peopleServed,
   suppliersIdentified,
   categoriesCovered,
   totalCost,
 }: ImpactHeroProps) {
+  const { stats } = useNetworkStats();
   const durationSec = pipelineDurationMs ? (pipelineDurationMs / 1000).toFixed(1) : '--';
   const formattedCost = totalCost < 0.01 && totalCost > 0
     ? `$${totalCost.toFixed(4)}`
@@ -60,13 +66,36 @@ export function ImpactHero({
 
         <div className="w-px h-10 bg-slate-700/50" />
 
-        <StatCard
-          icon={<Users size={16} className="text-emerald-400" />}
-          label="People Served"
-          value={peopleServed ? peopleServed.toLocaleString() : '--'}
-          sub="potential beneficiaries"
-          accent="text-emerald-300"
-        />
+        {/* People Served: daily / monthly / yearly */}
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-slate-700/50 flex items-center justify-center shrink-0">
+            <Users size={16} className="text-emerald-400" />
+          </div>
+          <div>
+            <p className="text-[11px] font-display font-semibold text-slate-500 uppercase tracking-widest">
+              Additional People Reached
+            </p>
+            {stats ? (
+              <div className="flex items-baseline gap-3">
+                <span className="text-xl font-mono font-bold tabular-nums text-emerald-300">
+                  {fmt(stats.dailyPeopleServed)}
+                  <span className="text-xs text-slate-500 font-normal ml-0.5">/day</span>
+                </span>
+                <span className="text-sm font-mono font-semibold tabular-nums text-emerald-400/70">
+                  {fmt(stats.monthlyPeopleServed)}
+                  <span className="text-xs text-slate-500 font-normal ml-0.5">/mo</span>
+                </span>
+                <span className="text-sm font-mono font-semibold tabular-nums text-emerald-400/70">
+                  {fmt(stats.yearlyPeopleServed)}
+                  <span className="text-xs text-slate-500 font-normal ml-0.5">/yr</span>
+                </span>
+              </div>
+            ) : (
+              <p className="text-xl font-mono font-bold tabular-nums text-emerald-300">--</p>
+            )}
+            <p className="text-[10px] text-slate-500">enabled by CrisisGrid response plans</p>
+          </div>
+        </div>
 
         <div className="w-px h-10 bg-slate-700/50" />
 

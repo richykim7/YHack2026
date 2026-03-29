@@ -14,7 +14,7 @@ LAVA_BASE_URL = os.environ.get("LAVA_BASE_URL", "https://api.lava.so")
 
 # Local per-agent cost tracker (populated by gateway.py after each LLM call)
 _agent_costs: dict[str, dict] = defaultdict(
-    lambda: {"agent": "", "cost": 0.0, "tokens": 0, "requests": 0}
+    lambda: {"agent": "", "model": "", "cost": 0.0, "tokens": 0, "requests": 0}
 )
 
 
@@ -22,6 +22,7 @@ def record_agent_usage(agent_name: str, input_tokens: int, output_tokens: int, m
     """Record per-agent token usage locally. Called by gateway after each LLM call."""
     entry = _agent_costs[agent_name]
     entry["agent"] = agent_name
+    entry["model"] = model
     entry["tokens"] += input_tokens + output_tokens
     entry["requests"] += 1
     # Cost will be reconciled from Lava spend_keys aggregate

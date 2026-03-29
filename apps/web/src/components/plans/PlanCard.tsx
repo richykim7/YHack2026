@@ -96,7 +96,7 @@ export function PlanCard({ plan, isSelected, isAccepted, isAnyAccepted, onSelect
           <div className="flex items-center gap-1.5 mb-0.5">
             <Users className="w-3.5 h-3.5 text-slate-500" />
             <span className="text-[11px] font-display font-semibold text-slate-500 uppercase tracking-widest">
-              People Served
+              Additional Reached
             </span>
           </div>
           <span className="font-mono font-bold tabular-nums text-lg text-slate-100">

@@ -174,6 +174,7 @@ export interface HexRunStatus {
 
 export interface AgentCost {
   agent: string;
+  model: string;
   cost: number;
   tokens: number;
   requests: number;
