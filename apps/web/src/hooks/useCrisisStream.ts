@@ -1,6 +1,6 @@
 'use client';
 import { useState, useCallback, useRef } from 'react';
-import type { SSEEvent, AgentActivity, AgentStatus, SourceOption, ResponsePlan, LavaCostBreakdown } from '@/lib/types';
+import type { SSEEvent, AgentActivity, AgentStatus, SourceOption, ResponsePlan, LavaCostBreakdown, GapAnalysis } from '@/lib/types';
 import { API_BASE, postJSON } from '@/lib/api';
 
 function getDefaultMessage(event: SSEEvent): string {
@@ -89,6 +89,7 @@ export function useCrisisStream() {
   const [hexPlansUrl, setHexPlansUrl] = useState<string | null>(null);
   const [hexAssessUrl, setHexAssessUrl] = useState<string | null>(null);
   const [lavaCosts, setLavaCosts] = useState<LavaCostBreakdown | null>(null);
+  const [gapAnalysis, setGapAnalysis] = useState<GapAnalysis | null>(null);
 
   const launchAndStream = useCallback(
     async (sessionId: string, crisisProfile: Record<string, unknown>) => {
@@ -107,6 +108,7 @@ export function useCrisisStream() {
       setHexPlansUrl(null);
       setHexAssessUrl(null);
       setLavaCosts(null);
+      setGapAnalysis(null);
 
       abortRef.current = new AbortController();
 
@@ -150,6 +152,9 @@ export function useCrisisStream() {
               if (event.type === 'hex_plans_ready' && event.run_url) {
                 setHexPlansUrl(event.run_url);
               }
+              if (event.type === 'assess_complete' && event.gap_analysis) {
+                setGapAnalysis(event.gap_analysis);
+              }
               if (event.type === 'lava_usage' && event.costs) {
                 setLavaCosts(event.costs);
               }
@@ -188,5 +193,5 @@ export function useCrisisStream() {
     setIsStreaming(false);
   }, []);
 
-  return { events, isStreaming, isComplete, launchAndStream, stopStream, sources, plans, hexPlansUrl, hexAssessUrl, lavaCosts };
+  return { events, isStreaming, isComplete, launchAndStream, stopStream, sources, plans, hexPlansUrl, hexAssessUrl, lavaCosts, gapAnalysis };
 }

@@ -1,6 +1,6 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
-import type { TabId, GapAnalysis, AssessResponse, ResponsePlan, SelectedPlanState } from '@/lib/types';
+import { useState, useEffect, useCallback } from 'react';
+import type { TabId, ResponsePlan, SelectedPlanState } from '@/lib/types';
 import { DashboardHeader } from './DashboardHeader';
 import { TabNavigation } from './TabNavigation';
 import { DashboardTab } from '@/components/dashboard/DashboardTab';
@@ -10,17 +10,19 @@ import { PlansTab } from '@/components/plans/PlansTab';
 import { FollowUpTab } from '@/components/placeholders/FollowUpTab';
 import { UsageTab } from '@/components/usage/UsageTab';
 import { useCrisisStream } from '@/hooks/useCrisisStream';
-import { API_BASE } from '@/lib/api';
+import { useLavaCosts } from '@/hooks/useLavaCosts';
+
+const CACHED_HEX_ASSESS_URL = process.env.NEXT_PUBLIC_HEX_ASSESS_CACHED_URL || null;
 
 export function DashboardShell() {
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [tabKey, setTabKey] = useState(0);
-  const { events, isStreaming, isComplete, launchAndStream, plans, hexPlansUrl } =
+  const { events, isStreaming, isComplete, launchAndStream, plans, hexPlansUrl, hexAssessUrl, gapAnalysis } =
     useCrisisStream();
   const [selectedPlan, setSelectedPlan] = useState<SelectedPlanState>(null);
-  const [gapAnalysis, setGapAnalysis] = useState<GapAnalysis | null>(null);
-  const [hexRunUrl, setHexRunUrl] = useState<string | null>(null);
-  const crisisProfileRef = useRef<Record<string, unknown> | null>(null);
+  const { refetch: refetchCosts } = useLavaCosts();
+
+  const effectiveHexUrl = hexAssessUrl || CACHED_HEX_ASSESS_URL;
 
   const handleTabChange = useCallback((tab: TabId) => {
     setActiveTab(tab);
@@ -29,7 +31,6 @@ export function DashboardShell() {
 
   const handleLaunch = useCallback(
     async (sessionId: string, crisisProfile: Record<string, unknown>) => {
-      crisisProfileRef.current = crisisProfile;
       await launchAndStream(sessionId, crisisProfile);
     },
     [launchAndStream],
@@ -41,23 +42,13 @@ export function DashboardShell() {
     setTabKey(k => k + 1);
   }, []);
 
+  // Refetch Lava costs after pipeline completes
   useEffect(() => {
-    if (!isComplete || !crisisProfileRef.current) return;
-    const profile = crisisProfileRef.current;
-    fetch(`${API_BASE}/api/assess`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(profile),
-    })
-      .then((r) => r.json())
-      .then((data: AssessResponse) => {
-        setGapAnalysis(data.gap_analysis);
-        if (data.hex_run?.run_url) setHexRunUrl(data.hex_run.run_url);
-      })
-      .catch(() => {
-        /* assess endpoint unavailable, tab stays empty */
-      });
-  }, [isComplete]);
+    if (isComplete) {
+      const timer = setTimeout(() => refetchCosts(), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isComplete, refetchCosts]);
 
   return (
     <div className="h-screen flex flex-col bg-slate-900 text-slate-100">
@@ -81,7 +72,7 @@ export function DashboardShell() {
         <div key={activeTab === 'assessment' ? `assessment-${tabKey}` : 'assessment'} className={activeTab === 'assessment' ? 'h-full animate-tab-in' : 'hidden'}>
           <AssessmentTab
             gapAnalysis={gapAnalysis}
-            hexRunUrl={hexRunUrl}
+            hexRunUrl={effectiveHexUrl}
             events={events}
             isStreaming={isStreaming}
             isComplete={isComplete}
@@ -101,7 +92,7 @@ export function DashboardShell() {
           <FollowUpTab pipelineComplete={isComplete} />
         </div>
         <div key={activeTab === 'usage' ? `usage-${tabKey}` : 'usage'} className={activeTab === 'usage' ? 'h-full animate-tab-in' : 'hidden'}>
-          <UsageTab />
+          <UsageTab pipelineComplete={isComplete} />
         </div>
       </main>
     </div>
