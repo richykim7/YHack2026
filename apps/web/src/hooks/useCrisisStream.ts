@@ -1,6 +1,6 @@
 'use client';
 import { useState, useCallback, useRef } from 'react';
-import type { SSEEvent, AgentActivity, AgentStatus, SourceOption, ResponsePlan, LavaCostBreakdown, GapAnalysis } from '@/lib/types';
+import type { SSEEvent, AgentActivity, AgentStatus, SourceOption, ResponsePlan, LavaCostBreakdown, GapAnalysis, MonitorPost, MonitorClassification } from '@/lib/types';
 import { API_BASE, postJSON } from '@/lib/api';
 
 function getDefaultMessage(event: SSEEvent): string {
@@ -18,6 +18,13 @@ function getDefaultMessage(event: SSEEvent): string {
     case 'hex_plans_ready': return 'Hex Plans dashboard ready.';
     case 'pipeline_complete': return 'Pipeline complete. Results ready.';
     case 'lava_usage': return `Pipeline cost: $${event.costs?.total_cost?.toFixed(4) || '0.00'}`;
+    // Monitor events (Phase 12)
+    case 'monitor_post': return `Scanning: ${event.post?.author || 'feed'}`;
+    case 'monitor_classification': return event.classification?.relevant ? 'Relevant post detected' : 'Post classified as irrelevant';
+    case 'crisis_detected': return 'CRISIS DETECTED -- Launching response pipeline';
+    case 'orchestrator_start': return event.message || 'Starting crisis analysis...';
+    case 'orchestrator_step': return event.message || `Running ${event.step}...`;
+    case 'crisis_profile_ready': return 'Crisis profile assembled. Launching pipeline.';
     default: return '';
   }
 }
@@ -44,6 +51,13 @@ function eventToActivity(event: SSEEvent): AgentActivity {
     lava_usage: 'pipeline',
     complete: 'pipeline',
     error: event.agent || 'pipeline',
+    // Monitor events (Phase 12)
+    monitor_post: 'monitor',
+    monitor_classification: 'monitor',
+    crisis_detected: 'monitor',
+    orchestrator_start: 'orchestrator',
+    orchestrator_step: 'orchestrator',
+    crisis_profile_ready: 'orchestrator',
   };
 
   const statusMap: Record<string, AgentStatus> = {
@@ -66,6 +80,13 @@ function eventToActivity(event: SSEEvent): AgentActivity {
     lava_usage: 'complete',
     complete: 'complete',
     error: 'error',
+    // Monitor events (Phase 12)
+    monitor_post: 'running',
+    monitor_classification: 'running',
+    crisis_detected: 'complete',
+    orchestrator_start: 'running',
+    orchestrator_step: 'running',
+    crisis_profile_ready: 'complete',
   };
 
   return {
@@ -90,6 +111,12 @@ export function useCrisisStream() {
   const [hexAssessUrl, setHexAssessUrl] = useState<string | null>(null);
   const [lavaCosts, setLavaCosts] = useState<LavaCostBreakdown | null>(null);
   const [gapAnalysis, setGapAnalysis] = useState<GapAnalysis | null>(null);
+
+  // Monitor state (Phase 12)
+  const [monitorPosts, setMonitorPosts] = useState<MonitorPost[]>([]);
+  const [classifications, setClassifications] = useState<Map<string, MonitorClassification>>(new Map());
+  const [crisisDetected, setCrisisDetected] = useState(false);
+  const [monitorMode, setMonitorMode] = useState<'idle' | 'monitoring' | 'pipeline'>('idle');
 
   const launchAndStream = useCallback(
     async (sessionId: string, crisisProfile: Record<string, unknown>) => {
@@ -188,10 +215,135 @@ export function useCrisisStream() {
     [],
   );
 
+  const startMonitorAndStream = useCallback(async () => {
+    // Generate session ID
+    const sessionId = crypto.randomUUID();
+
+    // Reset all state
+    setMonitorMode('monitoring');
+    setMonitorPosts([]);
+    setClassifications(new Map());
+    setCrisisDetected(false);
+    setEvents([]);
+    setSources([]);
+    setPlans([]);
+    setHexPlansUrl(null);
+    setHexAssessUrl(null);
+    setLavaCosts(null);
+    setGapAnalysis(null);
+    setIsStreaming(true);
+    setIsComplete(false);
+
+    // Step 1: POST to start monitor
+    await postJSON('/api/monitor/start', { session_id: sessionId });
+
+    // Step 2: Connect to monitor SSE stream (same ReadableStream pattern as launchAndStream)
+    abortRef.current = new AbortController();
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/monitor/stream/${sessionId}`,
+        { signal: abortRef.current.signal },
+      );
+
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const event: SSEEvent = JSON.parse(line.slice(6));
+
+            // Monitor-specific event handling
+            if (event.type === 'monitor_post' && event.post) {
+              setMonitorPosts(prev => [...prev, event.post!]);
+            }
+            if (event.type === 'monitor_classification' && event.post_id && event.classification) {
+              setClassifications(prev => {
+                const next = new Map(prev);
+                next.set(event.post_id!, event.classification!);
+                return next;
+              });
+            }
+            if (event.type === 'crisis_detected') {
+              setCrisisDetected(true);
+            }
+            if (event.type === 'crisis_profile_ready') {
+              setMonitorMode('pipeline');
+            }
+
+            // Extract rich data from pipeline events (same as launchAndStream)
+            if (event.type === 'source_found' && event.source) {
+              setSources(prev => [...prev, event.source!]);
+            }
+            if (event.type === 'discover_complete' && event.sources) {
+              setSources(event.sources);
+            }
+            if (event.type === 'plans_ready' && event.plans) {
+              setPlans(event.plans);
+            }
+            if (event.type === 'hex_assess_ready' && event.run_url) {
+              setHexAssessUrl(event.run_url);
+            }
+            if (event.type === 'hex_plans_ready' && event.run_url) {
+              setHexPlansUrl(event.run_url);
+            }
+            if (event.type === 'assess_complete' && event.gap_analysis) {
+              setGapAnalysis(event.gap_analysis);
+            }
+            if (event.type === 'lava_usage' && event.costs) {
+              setLavaCosts(event.costs);
+            }
+
+            // Add to activity feed
+            setEvents(prev => [...prev, eventToActivity(event)]);
+
+            if (event.type === 'complete' || event.type === 'pipeline_complete' || event.type === 'error') {
+              setIsComplete(true);
+              setIsStreaming(false);
+            }
+          } catch {
+            /* skip malformed lines */
+          }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        setEvents(prev => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            agent: 'monitor',
+            status: 'error',
+            message: 'Connection to monitor lost.',
+            timestamp: Date.now(),
+          },
+        ]);
+        setIsComplete(true);
+        setIsStreaming(false);
+      }
+    }
+  }, []);
+
   const stopStream = useCallback(() => {
     abortRef.current?.abort();
     setIsStreaming(false);
   }, []);
 
-  return { events, isStreaming, isComplete, launchAndStream, stopStream, sources, plans, hexPlansUrl, hexAssessUrl, lavaCosts, gapAnalysis };
+  return {
+    events, isStreaming, isComplete, launchAndStream, stopStream,
+    sources, plans, hexPlansUrl, hexAssessUrl, lavaCosts, gapAnalysis,
+    // Monitor state (Phase 12)
+    monitorPosts, classifications, crisisDetected, monitorMode,
+    startMonitorAndStream,
+  };
 }
