@@ -4,6 +4,7 @@ import { HealthGauge } from '@/components/dashboard/HealthGauge';
 import { FoodChainLogo } from '@/components/ui/FoodChainLogo';
 import { useSites } from '@/hooks/useSites';
 import { Activity, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
+import { InfoTooltip } from '@/components/ui/Tooltip';
 import type { ResponsePlan } from '@/lib/types';
 
 interface DashboardHeaderProps {
@@ -58,6 +59,7 @@ export function DashboardHeader({ selectedPlan }: DashboardHeaderProps) {
                 <Activity size={12} className="text-slate-500" />
                 <span className="text-[11px] font-display font-semibold text-slate-400 uppercase tracking-widest">
                   Network Health
+                  <InfoTooltip text="Average health score across all monitored sites, weighted by population served" />
                 </span>
               </div>
               <div className="flex items-center gap-3">

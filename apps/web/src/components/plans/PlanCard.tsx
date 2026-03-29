@@ -2,6 +2,7 @@
 
 import type { ResponsePlan } from '@/lib/types';
 import { cn } from '@/components/ui/cn';
+import { InfoTooltip } from '@/components/ui/Tooltip';
 import { Clock, DollarSign, Users, ShieldCheck, Check } from 'lucide-react';
 
 interface PlanCardProps {
@@ -71,6 +72,7 @@ export function PlanCard({ plan, isSelected, isAccepted, isAnyAccepted, onSelect
             <ShieldCheck className="w-3.5 h-3.5 text-slate-500" />
             <span className="text-[11px] font-display font-semibold text-slate-500 uppercase tracking-widest">
               Coverage
+              <InfoTooltip text="Percentage of projected demand gap that this plan can fill" />
             </span>
           </div>
           <span className="font-mono font-bold tabular-nums text-lg text-slate-100">

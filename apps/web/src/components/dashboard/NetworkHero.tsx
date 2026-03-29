@@ -1,5 +1,6 @@
 'use client';
 import { Package, Warehouse, TrendingUp, Activity } from 'lucide-react';
+import { InfoTooltip } from '@/components/ui/Tooltip';
 import { useSites } from '@/hooks/useSites';
 import { useInventory } from '@/hooks/useInventory';
 
@@ -9,16 +10,20 @@ interface StatCardProps {
   value: string;
   sub?: string;
   accent?: string;
+  tooltip?: string;
 }
 
-function StatCard({ icon, label, value, sub, accent = 'text-slate-100' }: StatCardProps) {
+function StatCard({ icon, label, value, sub, accent = 'text-slate-100', tooltip }: StatCardProps) {
   return (
     <div className="flex items-center gap-3">
       <div className="w-9 h-9 rounded-lg bg-slate-700/50 flex items-center justify-center shrink-0">
         {icon}
       </div>
       <div>
-        <p className="text-[11px] font-display font-semibold text-slate-500 uppercase tracking-widest">{label}</p>
+        <p className="text-[11px] font-display font-semibold text-slate-500 uppercase tracking-widest">
+          {label}
+          {tooltip && <InfoTooltip text={tooltip} />}
+        </p>
         <p className={`text-xl font-mono font-bold tabular-nums ${accent}`}>{value}</p>
         {sub && <p className="text-[10px] text-slate-500">{sub}</p>}
       </div>
@@ -109,6 +114,7 @@ export function NetworkHero() {
           label="Network Health"
           value={`${healthPct}%`}
           accent={healthColor}
+          tooltip="Average health score across all monitored sites, weighted by population served"
         />
       </div>
     </div>
