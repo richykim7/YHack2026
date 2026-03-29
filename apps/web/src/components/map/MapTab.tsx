@@ -38,6 +38,7 @@ export function MapTab({ selectedPlan }: { selectedPlan?: ResponsePlan | null })
         selectedSiteId={selectedSite?.id ?? null}
         onSiteClick={setSelectedSite}
         onBackgroundClick={clearSelection}
+        selectedPlan={selectedPlan ?? null}
       />
       {/* Vignette edge overlay */}
       <div className="map-vignette" />

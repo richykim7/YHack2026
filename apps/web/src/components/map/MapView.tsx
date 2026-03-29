@@ -2,7 +2,7 @@
 import { useRef, useEffect } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import type { Site } from '@/lib/types';
+import type { Site, ResponsePlan } from '@/lib/types';
 import { PHILADELPHIA_BOUNDS } from '@/lib/constants';
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN!;
@@ -12,6 +12,7 @@ interface MapViewProps {
   selectedSiteId: string | null;
   onSiteClick: (site: Site) => void;
   onBackgroundClick: () => void;
+  selectedPlan?: ResponsePlan | null;
 }
 
 function sitesToGeoJSON(sites: Site[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
@@ -35,7 +36,7 @@ function sitesToGeoJSON(sites: Site[]): GeoJSON.FeatureCollection<GeoJSON.Point>
   };
 }
 
-export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick }: MapViewProps) {
+export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick, selectedPlan }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const popup = useRef<mapboxgl.Popup | null>(null);
@@ -43,6 +44,7 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick 
   const selectedSiteIdRef = useRef(selectedSiteId);
   const onSiteClickRef = useRef(onSiteClick);
   const onBackgroundClickRef = useRef(onBackgroundClick);
+  const selectedPlanRef = useRef(selectedPlan ?? null);
 
   // Keep refs in sync so map click handlers always use latest callbacks
   useEffect(() => {
@@ -57,6 +59,10 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick 
     onSiteClickRef.current = onSiteClick;
     onBackgroundClickRef.current = onBackgroundClick;
   }, [onSiteClick, onBackgroundClick]);
+
+  useEffect(() => {
+    selectedPlanRef.current = selectedPlan ?? null;
+  }, [selectedPlan]);
 
   // Initialize map
   useEffect(() => {
@@ -94,7 +100,11 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick 
           'circle-radius': [
             'case',
             ['==', ['get', 'id'], selectedSiteIdRef.current ?? ''],
-            18,
+            ['case',
+              ['==', ['get', 'type'], 'warehouse'],
+              22,
+              16,
+            ],
             0,
           ],
           'circle-color': 'transparent',
@@ -112,18 +122,29 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick 
         },
       });
 
-      // Main markers — larger for critical sites
+      // Main markers — differentiated by site type and health
       m.addLayer({
         id: 'site-markers',
         type: 'circle',
         source: 'sites',
         paint: {
           'circle-radius': [
-            'interpolate', ['linear'], ['get', 'health_score'],
-            0, 13,
-            0.5, 11,
-            0.7, 9,
-            1.0, 9,
+            'case',
+            // Warehouses are larger
+            ['==', ['get', 'type'], 'warehouse'],
+            ['interpolate', ['linear'], ['get', 'health_score'],
+              0, 15,
+              0.5, 13,
+              0.7, 12,
+              1.0, 12,
+            ],
+            // Distribution sites are smaller
+            ['interpolate', ['linear'], ['get', 'health_score'],
+              0, 10,
+              0.5, 8,
+              0.7, 7,
+              1.0, 7,
+            ],
           ],
           'circle-color': [
             'step',
@@ -173,12 +194,14 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick 
         const coords = (f.geometry as GeoJSON.Point).coordinates.slice() as [number, number];
         const score = Math.round((props.health_score as number) * 100);
         const scoreColor = score >= 70 ? '#4ade80' : score >= 50 ? '#fbbf24' : '#f87171';
+        const typeLabel = props.type === 'warehouse' ? 'Warehouse' : 'Distribution Site';
 
         popup.current
           .setLngLat(coords)
           .setHTML(`
             <div style="font-family: var(--font-heading), system-ui; padding: 2px 0;">
               <div style="font-weight: 600; font-size: 12px; color: #e2e8f0; margin-bottom: 2px;">${props.name}</div>
+              <div style="font-size: 10px; color: #94a3b8; margin-bottom: 2px;">${typeLabel}</div>
               <div style="font-size: 11px; color: ${scoreColor}; font-family: var(--font-code), monospace;">${score}% health</div>
             </div>
           `)
@@ -218,7 +241,11 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick 
       m.setPaintProperty('site-pulse', 'circle-radius', [
         'case',
         ['==', ['get', 'id'], selectedSiteId ?? ''],
-        18,
+        ['case',
+          ['==', ['get', 'type'], 'warehouse'],
+          22,
+          16,
+        ],
         0,
       ]);
     }
