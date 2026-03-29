@@ -771,7 +771,7 @@ def step4_rebuild_inventory():
     near_term_lbs = sum(
         r["quantity_lbs"] for r in inventory_rows
         if r["food_category"] in PERISHABLE_CATEGORIES
-        and datetime.strptime(r["expiration_date"], "%Y-%m-%d") < now + timedelta(days=14)
+        and datetime.strptime(r["expiration_date"], "%Y-%m-%d").replace(tzinfo=timezone.utc) < now + timedelta(days=14)
     )
     total_lbs = sum(r["quantity_lbs"] for r in inventory_rows)
     print(f"\n  Near-term expiration (14-day): {near_term_lbs:,.0f} lbs ({near_term_lbs/total_lbs*100:.1f}% of total)")
@@ -901,12 +901,79 @@ def step6_summary():
 
 
 # ---------------------------------------------------------------------------
+# Step 7: Recompute health scores for all sites (per A1)
+# ---------------------------------------------------------------------------
+
+def step7_recompute_health_scores():
+    """Recompute health scores for all sites after inventory rebuild.
+
+    Calls the compute_health_score Postgres RPC function for each site
+    and prints before/after comparison for coherence verification.
+    """
+    print("\nStep 7: Recomputing health scores for all sites...")
+
+    # Get current (stale) health scores
+    sites = sb.table("sites").select("id, name, type, health_score").execute()
+
+    before_scores = {}
+    for s in sites.data:
+        before_scores[s["id"]] = {
+            "name": s["name"],
+            "site_type": s.get("type", "unknown"),
+            "old_score": float(s["health_score"]) if s["health_score"] is not None else 0.0,
+        }
+
+    # Recompute each site's health score via RPC and update the table
+    for site_id, info in before_scores.items():
+        try:
+            result = sb.rpc("compute_health_score", {"target_site_id": site_id}).execute()
+            new_score = float(result.data) if result.data is not None else 0.0
+            # RPC returns value but does not update the table -- do it explicitly
+            sb.table("sites").update({"health_score": round(new_score, 4)}).eq("id", site_id).execute()
+        except Exception as e:
+            print(f"  WARNING: compute_health_score failed for {info['name']}: {e}")
+            new_score = info["old_score"]
+
+        info["new_score"] = new_score
+
+    # Read back final scores from DB
+    final_sites = sb.table("sites").select("id, health_score").execute()
+    final_scores = {s["id"]: float(s["health_score"]) if s["health_score"] is not None else 0.0 for s in final_sites.data}
+
+    # Print coherence report
+    print(f"\n  {'Site':<35s} {'Type':<20s} {'Before':>8s} {'After':>8s} {'DB':>8s}")
+    print(f"  {'-'*35} {'-'*20} {'-'*8} {'-'*8} {'-'*8}")
+    for site_id, info in before_scores.items():
+        db_score = final_scores.get(site_id, 0.0)
+        print(f"  {info['name']:<35s} {info['site_type']:<20s} {info['old_score']:>8.3f} {info['new_score']:>8.3f} {db_score:>8.3f}")
+
+    # Get inventory per site for coherence check
+    inv_resp = sb.table("inventory").select("site_id, food_category, quantity_lbs").eq("status", "available").execute()
+    site_inv: dict[str, dict[str, float]] = {}
+    for row in inv_resp.data:
+        sid = row["site_id"]
+        if sid not in site_inv:
+            site_inv[sid] = {"total_lbs": 0.0, "categories": set()}
+        site_inv[sid]["total_lbs"] += float(row["quantity_lbs"])
+        site_inv[sid]["categories"].add(row["food_category"])
+
+    print(f"\n  Health Score Coherence Report:")
+    print(f"  {'Site':<35s} {'Score':>8s} {'Inv (lbs)':>12s} {'Categories':>12s}")
+    print(f"  {'-'*35} {'-'*8} {'-'*12} {'-'*12}")
+    for site_id, info in before_scores.items():
+        inv = site_inv.get(site_id, {"total_lbs": 0.0, "categories": set()})
+        score = final_scores.get(site_id, 0.0)
+        n_cats = len(inv["categories"]) if isinstance(inv["categories"], set) else 0
+        print(f"  {info['name']:<35s} {score:>8.3f} {inv['total_lbs']:>12,.0f} {n_cats:>12d}")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("CrisisGrid Seed Data Fix (Phase 8)")
+    print("CrisisGrid Seed Data Fix (Phase 8 + Phase 13)")
     print("=" * 60)
     print()
 
@@ -916,5 +983,6 @@ if __name__ == "__main__":
     step4_rebuild_inventory()
     step5_update_demand_history()
     step6_summary()
+    step7_recompute_health_scores()
 
     print("\nDone! Run 'python scripts/verify_seed.py' to verify gap analysis.")
