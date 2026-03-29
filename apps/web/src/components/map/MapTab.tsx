@@ -4,7 +4,6 @@ import { MapView } from './MapView';
 import { SiteDetailCard } from './SiteDetailCard';
 import { useSites } from '@/hooks/useSites';
 import { useSiteInventory } from '@/hooks/useSiteInventory';
-import { NetworkHealthGauge } from './NetworkHealthGauge';
 import type { Site, ResponsePlan } from '@/lib/types';
 
 export function MapTab({ selectedPlan }: { selectedPlan?: ResponsePlan | null }) {
@@ -15,18 +14,6 @@ export function MapTab({ selectedPlan }: { selectedPlan?: ResponsePlan | null })
   );
 
   const clearSelection = useCallback(() => setSelectedSite(null), []);
-
-  // Compute network health scores for gauge
-  const currentScore = sites.length > 0
-    ? sites.reduce((sum, s) => sum + s.health_score, 0) / sites.length
-    : 0;
-
-  const projectedScore = selectedPlan
-    ? Math.min(
-        currentScore + (1 - currentScore) * (selectedPlan.coverage_pct / 100) * 0.6,
-        0.98
-      )
-    : currentScore;
 
   if (loading) {
     return (
@@ -63,14 +50,6 @@ export function MapTab({ selectedPlan }: { selectedPlan?: ResponsePlan | null })
           onClose={clearSelection}
           className="absolute top-4 right-4 w-80 z-10 animate-slide-in-right"
         />
-      )}
-      {selectedPlan && (
-        <div className="absolute bottom-4 left-4 z-10">
-          <NetworkHealthGauge
-            currentScore={currentScore}
-            projectedScore={projectedScore}
-          />
-        </div>
       )}
     </div>
   );
