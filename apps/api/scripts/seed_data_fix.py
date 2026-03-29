@@ -32,6 +32,18 @@ sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 FOOD_CATEGORIES = ["protein", "grains", "dairy", "produce", "canned", "beverages"]
 
+# Per-category expiration ranges (days from now)
+EXPIRATION_RANGES = {
+    "produce":   (3, 7),
+    "dairy":     (7, 14),
+    "protein":   (3, 5),
+    "canned":    (180, 730),
+    "grains":    (180, 730),
+    "beverages": (180, 730),
+}
+
+PERISHABLE_CATEGORIES = {"produce", "dairy", "protein"}
+
 # Existing supplier UUIDs (preserve FK references)
 EXISTING_SUPPLIER_IDS = {
     "aaaa1111-1111-1111-1111-111111111111": "Philabundance",
@@ -652,8 +664,20 @@ def step4_rebuild_inventory():
     #   warehouse 1: 15%, warehouse 2: 15%, healthy sites: 10% each, stressed: 10% each
 
     now = datetime.now(timezone.utc)
-    expiration = (now + timedelta(days=30)).strftime("%Y-%m-%d")
     received = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+
+    # Seeded RNG for deterministic expiration date generation
+    rng = random.Random(42)
+
+    def make_expiration(category: str, near_term: bool = False) -> str:
+        """Generate expiration date based on category and near-term flag."""
+        if near_term:
+            ranges = {"produce": (1, 4), "dairy": (2, 7), "protein": (1, 4)}
+            lo, hi = ranges.get(category, (1, 7))
+        else:
+            lo, hi = EXPIRATION_RANGES[category]
+        days = rng.randint(lo, hi)
+        return (now + timedelta(days=days)).strftime("%Y-%m-%d")
 
     inventory_rows = []
 
@@ -675,63 +699,65 @@ def step4_rebuild_inventory():
             stressed_pct = 0.10
             remainder = total - int(total * (w1_pct + w2_pct + 4 * healthy_pct + 2 * stressed_pct))
 
+        def _add_inventory_rows(site_id: str, qty: int, cat: str = cat, meta: dict = meta):
+            """Add one or two inventory rows depending on perishability."""
+            if cat in PERISHABLE_CATEGORIES:
+                # Split: ~70% normal expiration, ~30% near-term expiration
+                qty_normal = int(qty * 0.70)
+                qty_near = qty - qty_normal
+                inventory_rows.append({
+                    "site_id": site_id,
+                    "food_category": cat,
+                    "subcategory": meta["subcategory"],
+                    "quantity_lbs": qty_normal,
+                    "unit_cost_dollars": meta["unit_cost_dollars"],
+                    "expiration_date": make_expiration(cat, near_term=False),
+                    "received_date": received,
+                    "source_type": meta["source_type"],
+                    "status": "available",
+                })
+                inventory_rows.append({
+                    "site_id": site_id,
+                    "food_category": cat,
+                    "subcategory": meta["subcategory"],
+                    "quantity_lbs": qty_near,
+                    "unit_cost_dollars": meta["unit_cost_dollars"],
+                    "expiration_date": make_expiration(cat, near_term=True),
+                    "received_date": received,
+                    "source_type": meta["source_type"],
+                    "status": "available",
+                })
+            else:
+                # Non-perishable: single row with normal expiration
+                inventory_rows.append({
+                    "site_id": site_id,
+                    "food_category": cat,
+                    "subcategory": meta["subcategory"],
+                    "quantity_lbs": qty,
+                    "unit_cost_dollars": meta["unit_cost_dollars"],
+                    "expiration_date": make_expiration(cat, near_term=False),
+                    "received_date": received,
+                    "source_type": meta["source_type"],
+                    "status": "available",
+                })
+
         # Warehouse 1
         qty_w1 = int(total * w1_pct) + remainder // 2
-        inventory_rows.append({
-            "site_id": WAREHOUSE_SITES[0],
-            "food_category": cat,
-            "subcategory": meta["subcategory"],
-            "quantity_lbs": qty_w1,
-            "unit_cost_dollars": meta["unit_cost_dollars"],
-            "expiration_date": expiration,
-            "received_date": received,
-            "source_type": meta["source_type"],
-            "status": "available",
-        })
+        _add_inventory_rows(WAREHOUSE_SITES[0], qty_w1)
 
         # Warehouse 2
         qty_w2 = int(total * w2_pct) + (remainder - remainder // 2)
-        inventory_rows.append({
-            "site_id": WAREHOUSE_SITES[1],
-            "food_category": cat,
-            "subcategory": meta["subcategory"],
-            "quantity_lbs": qty_w2,
-            "unit_cost_dollars": meta["unit_cost_dollars"],
-            "expiration_date": expiration,
-            "received_date": received,
-            "source_type": meta["source_type"],
-            "status": "available",
-        })
+        _add_inventory_rows(WAREHOUSE_SITES[1], qty_w2)
 
         # 4 healthy dist sites
         for site_id in healthy_dist:
             qty = int(total * healthy_pct)
-            inventory_rows.append({
-                "site_id": site_id,
-                "food_category": cat,
-                "subcategory": meta["subcategory"],
-                "quantity_lbs": qty,
-                "unit_cost_dollars": meta["unit_cost_dollars"],
-                "expiration_date": expiration,
-                "received_date": received,
-                "source_type": meta["source_type"],
-                "status": "available",
-            })
+            _add_inventory_rows(site_id, qty)
 
         # 2 stressed sites
         for site_id in STRESSED_SITES:
             qty = int(total * stressed_pct)
-            inventory_rows.append({
-                "site_id": site_id,
-                "food_category": cat,
-                "subcategory": meta["subcategory"],
-                "quantity_lbs": qty,
-                "unit_cost_dollars": meta["unit_cost_dollars"],
-                "expiration_date": expiration,
-                "received_date": received,
-                "source_type": meta["source_type"],
-                "status": "available",
-            })
+            _add_inventory_rows(site_id, qty)
 
     sb.table("inventory").insert(inventory_rows).execute()
 
@@ -740,6 +766,15 @@ def step4_rebuild_inventory():
     for cat in FOOD_CATEGORIES:
         cat_total = sum(r["quantity_lbs"] for r in inventory_rows if r["food_category"] == cat)
         print(f"    {cat:12s}: {cat_total:>8,} lbs")
+
+    # Report near-term expiration for perishables
+    near_term_lbs = sum(
+        r["quantity_lbs"] for r in inventory_rows
+        if r["food_category"] in PERISHABLE_CATEGORIES
+        and datetime.strptime(r["expiration_date"], "%Y-%m-%d") < now + timedelta(days=14)
+    )
+    total_lbs = sum(r["quantity_lbs"] for r in inventory_rows)
+    print(f"\n  Near-term expiration (14-day): {near_term_lbs:,.0f} lbs ({near_term_lbs/total_lbs*100:.1f}% of total)")
 
 
 # ---------------------------------------------------------------------------

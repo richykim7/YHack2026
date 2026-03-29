@@ -40,6 +40,8 @@ class SourceOption(BaseModel):
     reliability_score: float  # 0.0-1.0 from supplier table or estimated
     source_type: str  # "database" | "web_search"
     notes: str = ""
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class PlanLineItem(BaseModel):
@@ -52,6 +54,21 @@ class PlanLineItem(BaseModel):
     quantity_lbs: float  # how much to order
     cost: float  # quantity_lbs * unit_cost_per_lb
     lead_time_days: int
+    delivery_cost: float = 0.0
+    distance_miles: float = 0.0
+
+
+class TransferItem(BaseModel):
+    """Inter-site food bank transfer within the network."""
+
+    from_site_id: str
+    from_site_name: str
+    to_site_id: str
+    to_site_name: str
+    food_category: str
+    quantity_lbs: float
+    delivery_cost: float
+    distance_miles: float
 
 
 class ResponsePlan(BaseModel):
@@ -64,6 +81,7 @@ class ResponsePlan(BaseModel):
     coverage_pct: float  # percentage of gap covered (0-100)
     max_lead_time_days: int  # longest lead time across all line items
     estimated_people_served: int
+    transfers: list[TransferItem] = []
 
 
 class LavaCostBreakdown(BaseModel):
