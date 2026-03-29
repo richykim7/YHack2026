@@ -3,8 +3,13 @@ import { NETWORK_NAME } from '@/lib/constants';
 import { HealthGauge } from '@/components/dashboard/HealthGauge';
 import { useSites } from '@/hooks/useSites';
 import { Activity, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
+import type { ResponsePlan } from '@/lib/types';
 
-export function DashboardHeader() {
+interface DashboardHeaderProps {
+  selectedPlan?: ResponsePlan | null;
+}
+
+export function DashboardHeader({ selectedPlan }: DashboardHeaderProps) {
   const { sites, loading } = useSites();
 
   // Compute composite network health score: weighted average by serves_population
@@ -81,8 +86,14 @@ export function DashboardHeader() {
               </div>
             </div>
 
-            {/* Gauge */}
-            <HealthGauge score={compositeScore} size={56} strokeWidth={5} />
+            {/* Gauge — show projected score when a plan is selected */}
+            <HealthGauge
+              score={selectedPlan
+                ? Math.min(compositeScore + (1 - compositeScore) * (selectedPlan.coverage_pct / 100) * 0.6, 0.98)
+                : compositeScore}
+              size={56}
+              strokeWidth={5}
+            />
           </>
         )}
       </div>

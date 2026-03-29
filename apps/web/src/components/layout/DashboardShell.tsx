@@ -52,7 +52,7 @@ export function DashboardShell() {
 
   return (
     <div className="h-screen flex flex-col bg-slate-900 text-slate-100">
-      <DashboardHeader />
+      <DashboardHeader selectedPlan={selectedPlan} />
       <TabNavigation
         activeTab={activeTab}
         onTabChange={handleTabChange}

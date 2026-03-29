@@ -51,16 +51,6 @@ function sitesToGeoJSON(sites: Site[]): GeoJSON.FeatureCollection<GeoJSON.Point>
   };
 }
 
-// Precomputed dash-array sequence for flowing-dash animation.
-// Cycling through these at ~60ms intervals creates the illusion of
-// dashes moving along the line in the direction of the geometry.
-const DASH_SEQUENCE: number[][] = [
-  [0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5],
-  [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0], [3.5, 3.5, 0],
-  [4, 3, 0], [3, 0.5, 3.5], [2, 1, 4], [1, 1.5, 4.5],
-  [0, 2, 5],
-];
-
 interface SiteDeliveryInfo {
   totalLbs: number;
   suppliers: Set<string>;
@@ -76,7 +66,6 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
   const onSiteClickRef = useRef(onSiteClick);
   const onBackgroundClickRef = useRef(onBackgroundClick);
   const selectedPlanRef = useRef(selectedPlan ?? null);
-  const animationRef = useRef<number | null>(null);
   const siteDeliveryMapRef = useRef<Map<string, SiteDeliveryInfo> | null>(null);
 
   // Keep refs in sync so map click handlers always use latest callbacks
@@ -320,19 +309,12 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
     let cleanupHandlers: (() => void) | null = null;
 
     const applyOverlays = () => {
-      // Cancel any running dash animation
-      if (animationRef.current !== null) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
-      }
-
       // Remove previous supplier/route/arrow layers if they exist
       if (m.getLayer('supplier-labels')) m.removeLayer('supplier-labels');
       if (m.getLayer('supplier-markers')) m.removeLayer('supplier-markers');
       if (m.getLayer('route-arrows')) m.removeLayer('route-arrows');
       if (m.getLayer('route-lines')) m.removeLayer('route-lines');
       if (m.getSource('suppliers')) m.removeSource('suppliers');
-      if (m.getSource('route-arrow-points')) m.removeSource('route-arrow-points');
       if (m.getSource('routes')) m.removeSource('routes');
 
       if (!selectedPlan) {
@@ -409,29 +391,7 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
         features: routeFeatures,
       };
 
-      // Build arrow point features at 85% along each route line
-      const arrowFeatures: GeoJSON.Feature<GeoJSON.Point>[] = routeFeatures.map((rf) => {
-        const coords = rf.geometry.coordinates;
-        const [sx, sy] = coords[0]; // supplier lng, lat
-        const [dx, dy] = coords[1]; // destination lng, lat
-        // Position at 85% along the line (close to destination)
-        const ax = sx + (dx - sx) * 0.85;
-        const ay = sy + (dy - sy) * 0.85;
-        // Bearing in degrees — Mapbox icon-rotate is CW from north
-        const bearing = (Math.atan2(dx - sx, dy - sy) * 180) / Math.PI;
-        return {
-          type: 'Feature' as const,
-          geometry: { type: 'Point' as const, coordinates: [ax, ay] },
-          properties: { bearing },
-        };
-      });
-
-      const arrowGeoJSON: GeoJSON.FeatureCollection<GeoJSON.Point> = {
-        type: 'FeatureCollection',
-        features: arrowFeatures,
-      };
-
-      // Add route lines (behind supplier markers) with initial dash pattern
+      // Add route lines (behind supplier markers) — static dashed lines
       m.addSource('routes', { type: 'geojson', data: routeGeoJSON });
       m.addLayer({
         id: 'route-lines',
@@ -440,66 +400,31 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
         paint: {
           'line-color': '#60a5fa',
           'line-width': 1.5,
-          'line-dasharray': DASH_SEQUENCE[0],
-          'line-opacity': 0.6,
+          'line-dasharray': [4, 3],
+          'line-opacity': 0.5,
         },
       }, 'site-pulse');
 
-      // Start flowing-dash animation
-      let step = 0;
-      let lastTime = 0;
-      const animateDash = (timestamp: number) => {
-        if (timestamp - lastTime >= 60) {
-          lastTime = timestamp;
-          step = (step + 1) % DASH_SEQUENCE.length;
-          if (m.getLayer('route-lines')) {
-            m.setPaintProperty('route-lines', 'line-dasharray', DASH_SEQUENCE[step]);
-          }
-        }
-        animationRef.current = requestAnimationFrame(animateDash);
-      };
-      animationRef.current = requestAnimationFrame(animateDash);
-
-      // Add arrowhead image if not already present
-      if (!m.hasImage('route-arrow')) {
-        const arrowSize = 16;
-        const canvas = document.createElement('canvas');
-        canvas.width = arrowSize;
-        canvas.height = arrowSize;
-        const ctx = canvas.getContext('2d')!;
-        ctx.fillStyle = '#60a5fa';
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(arrowSize, arrowSize / 2);
-        ctx.lineTo(0, arrowSize);
-        ctx.closePath();
-        ctx.fill();
-        const imageData = ctx.getImageData(0, 0, arrowSize, arrowSize);
-        m.addImage('route-arrow', {
-          width: arrowSize,
-          height: arrowSize,
-          data: new Uint8Array(imageData.data.buffer),
-        });
-      }
-
-      // Add arrow point source and symbol layer
-      m.addSource('route-arrow-points', { type: 'geojson', data: arrowGeoJSON });
+      // Add chevron arrows along the route lines to show direction of flow
       m.addLayer({
         id: 'route-arrows',
         type: 'symbol',
-        source: 'route-arrow-points',
+        source: 'routes',
         layout: {
-          'icon-image': 'route-arrow',
-          'icon-size': 0.7,
-          'icon-rotate': ['get', 'bearing'],
-          'icon-rotation-alignment': 'map',
-          'icon-allow-overlap': true,
-          'icon-ignore-placement': true,
+          'symbol-placement': 'line',
+          'symbol-spacing': 80,
+          'text-field': '\u203A',
+          'text-size': 18,
+          'text-keep-upright': false,
+          'text-rotation-alignment': 'map',
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
         },
         paint: {
-          'icon-opacity': 0.8,
+          'text-color': '#60a5fa',
+          'text-opacity': 0.7,
         },
-      }, 'site-pulse');
+      });
 
       // Add supplier markers
       m.addSource('suppliers', { type: 'geojson', data: supplierGeoJSON });
@@ -584,11 +509,6 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
     }
 
     return () => {
-      // Cancel dash animation on cleanup
-      if (animationRef.current !== null) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
-      }
       cleanupHandlers?.();
     };
   }, [selectedPlan]);
