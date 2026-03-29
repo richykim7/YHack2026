@@ -4,6 +4,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { Site, ResponsePlan } from '@/lib/types';
 import { PHILADELPHIA_BOUNDS } from '@/lib/constants';
+import { getSupplierCoord } from '@/lib/supplierCoords';
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN!;
 
@@ -13,6 +14,20 @@ interface MapViewProps {
   onSiteClick: (site: Site) => void;
   onBackgroundClick: () => void;
   selectedPlan?: ResponsePlan | null;
+}
+
+function findNearestSite(lat: number, lng: number, sites: Site[]): Site | null {
+  if (sites.length === 0) return null;
+  let nearest = sites[0];
+  let minDist = Infinity;
+  for (const s of sites) {
+    const d = (s.lat - lat) ** 2 + (s.lng - lng) ** 2;
+    if (d < minDist) {
+      minDist = d;
+      nearest = s;
+    }
+  }
+  return nearest;
 }
 
 function sitesToGeoJSON(sites: Site[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
@@ -250,6 +265,171 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
       ]);
     }
   }, [selectedSiteId]);
+
+  // Overlay supplier markers + route lines when a plan is selected
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+
+    let cleanupHandlers: (() => void) | null = null;
+
+    const applyOverlays = () => {
+      // Remove previous supplier/route layers if they exist
+      if (m.getLayer('supplier-labels')) m.removeLayer('supplier-labels');
+      if (m.getLayer('supplier-markers')) m.removeLayer('supplier-markers');
+      if (m.getLayer('route-lines')) m.removeLayer('route-lines');
+      if (m.getSource('suppliers')) m.removeSource('suppliers');
+      if (m.getSource('routes')) m.removeSource('routes');
+
+      if (!selectedPlan) return;
+
+      // Aggregate quantities per supplier
+      const supplierAgg: Record<string, { coord: { lat: number; lng: number }; totalQty: number; items: string[] }> = {};
+      for (const li of selectedPlan.line_items) {
+        const coord = getSupplierCoord(li.supplier_name);
+        if (!coord) continue;
+        if (!supplierAgg[li.supplier_name]) {
+          supplierAgg[li.supplier_name] = { coord, totalQty: 0, items: [] };
+        }
+        supplierAgg[li.supplier_name].totalQty += li.quantity_lbs;
+        supplierAgg[li.supplier_name].items.push(
+          `${li.quantity_lbs.toLocaleString()} lbs ${li.food_category}`
+        );
+      }
+
+      const supplierFeatures: GeoJSON.Feature<GeoJSON.Point>[] = Object.entries(supplierAgg).map(
+        ([name, { coord, totalQty, items }]) => ({
+          type: 'Feature' as const,
+          geometry: { type: 'Point' as const, coordinates: [coord.lng, coord.lat] },
+          properties: { name, total_quantity_lbs: totalQty, items_summary: items.join(', ') },
+        })
+      );
+
+      const supplierGeoJSON: GeoJSON.FeatureCollection<GeoJSON.Point> = {
+        type: 'FeatureCollection',
+        features: supplierFeatures,
+      };
+
+      // Build route lines from each supplier to nearest site
+      const routeFeatures: GeoJSON.Feature<GeoJSON.LineString>[] = [];
+      for (const [name, { coord }] of Object.entries(supplierAgg)) {
+        const target = findNearestSite(coord.lat, coord.lng, sitesRef.current);
+        if (!target) continue;
+        routeFeatures.push({
+          type: 'Feature' as const,
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: [[coord.lng, coord.lat], [target.lng, target.lat]],
+          },
+          properties: { supplier: name, site: target.name },
+        });
+      }
+
+      const routeGeoJSON: GeoJSON.FeatureCollection<GeoJSON.LineString> = {
+        type: 'FeatureCollection',
+        features: routeFeatures,
+      };
+
+      // Add route lines (behind supplier markers)
+      m.addSource('routes', { type: 'geojson', data: routeGeoJSON });
+      m.addLayer({
+        id: 'route-lines',
+        type: 'line',
+        source: 'routes',
+        paint: {
+          'line-color': '#60a5fa',
+          'line-width': 1.5,
+          'line-dasharray': [4, 3],
+          'line-opacity': 0.6,
+        },
+      }, 'site-pulse');
+
+      // Add supplier markers
+      m.addSource('suppliers', { type: 'geojson', data: supplierGeoJSON });
+      m.addLayer({
+        id: 'supplier-markers',
+        type: 'circle',
+        source: 'suppliers',
+        paint: {
+          'circle-radius': [
+            'interpolate', ['linear'], ['get', 'total_quantity_lbs'],
+            500, 6,
+            2000, 9,
+            5000, 13,
+            10000, 16,
+          ],
+          'circle-color': '#3b82f6',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#1e293b',
+          'circle-opacity': 0.85,
+        },
+      });
+
+      // Add supplier name labels
+      m.addLayer({
+        id: 'supplier-labels',
+        type: 'symbol',
+        source: 'suppliers',
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-size': 10,
+          'text-offset': [0, 1.5],
+          'text-anchor': 'top',
+          'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+        },
+        paint: {
+          'text-color': '#93c5fd',
+          'text-halo-color': '#0f172a',
+          'text-halo-width': 1,
+        },
+      });
+
+      // Supplier marker hover handlers
+      const onSupplierEnter = (e: mapboxgl.MapMouseEvent & { features?: mapboxgl.GeoJSONFeature[] }) => {
+        m.getCanvas().style.cursor = 'pointer';
+        if (!e.features || e.features.length === 0 || !popup.current) return;
+        const f = e.features[0];
+        const props = f.properties;
+        if (!props) return;
+        const coords = (f.geometry as GeoJSON.Point).coordinates.slice() as [number, number];
+        popup.current
+          .setLngLat(coords)
+          .setHTML(`
+            <div style="font-family: var(--font-heading), system-ui; padding: 2px 0;">
+              <div style="font-weight: 600; font-size: 12px; color: #93c5fd; margin-bottom: 2px;">${props.name}</div>
+              <div style="font-size: 10px; color: #94a3b8;">Supplier</div>
+              <div style="font-size: 11px; color: #e2e8f0; margin-top: 2px;">${props.items_summary}</div>
+            </div>
+          `)
+          .addTo(m);
+      };
+      const onSupplierLeave = () => {
+        m.getCanvas().style.cursor = '';
+        popup.current?.remove();
+      };
+      m.on('mouseenter', 'supplier-markers', onSupplierEnter);
+      m.on('mouseleave', 'supplier-markers', onSupplierLeave);
+
+      cleanupHandlers = () => {
+        try {
+          m.off('mouseenter', 'supplier-markers', onSupplierEnter);
+          m.off('mouseleave', 'supplier-markers', onSupplierLeave);
+        } catch {
+          /* layer might already be removed */
+        }
+      };
+    };
+
+    if (m.isStyleLoaded()) {
+      applyOverlays();
+    } else {
+      m.once('load', applyOverlays);
+    }
+
+    return () => {
+      cleanupHandlers?.();
+    };
+  }, [selectedPlan]);
 
   // Resize map when container becomes visible (preserve-mount pattern)
   useEffect(() => {
