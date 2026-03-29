@@ -1,22 +1,26 @@
-"""Follow-up endpoint — proxies data questions to Hex Threads via MCP.
+"""Follow-up endpoint — returns Hex Threads URL for iframe embedding.
 
-Uses HexThreadsClient to create a Thread, poll for completion, and return
-the AI-generated answer inline. Falls back to a URL-only response if
-OAuth tokens are not configured.
+Hex Threads iframe is allowed (frame-ancestors: *). The frontend embeds
+the Threads UI directly in the Follow-up tab and links from the chat.
+
+Note: MCP client code exists in services/hex_threads.py for when Hex
+fixes their server-side bug. Currently all MCP tool calls return
+"internal server error" regardless of the operation.
 """
 
+import os
 import logging
 
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from services.hex_threads import HexThreadsClient
-
 router = APIRouter(prefix="/api/crisis", tags=["crisis"])
 logger = logging.getLogger(__name__)
 
-# Singleton client — reuses token storage across requests
-_hex_client = HexThreadsClient()
+HEX_WORKSPACE_ID = os.getenv(
+    "HEX_WORKSPACE_ID", "019d332d-fb08-7115-8160-d2aee00146ea"
+)
+HEX_THREADS_URL = f"https://app.hex.tech/{HEX_WORKSPACE_ID}/threads"
 
 
 class FollowupRequest(BaseModel):
@@ -36,12 +40,11 @@ class FollowupResponse(BaseModel):
 
 @router.post("/followup", response_model=FollowupResponse)
 async def crisis_followup(request: FollowupRequest):
-    """Proxy follow-up questions to Hex Threads via MCP.
+    """Return Hex Threads URL for the follow-up question.
 
-    If OAuth tokens are available, creates a real Hex Thread and returns
-    the AI-generated answer. Otherwise returns a fallback message.
+    The frontend embeds Hex Threads in an iframe (Follow-up tab) and
+    shows an inline link in the chat sidebar.
     """
-    # Build crisis context string
     context_parts = []
     if request.crisis_type:
         context_parts.append(f"{request.crisis_type} crisis")
@@ -49,37 +52,19 @@ async def crisis_followup(request: FollowupRequest):
         context_parts.append(f"in {request.geography}")
     if request.affected_population:
         context_parts.append(f"affecting ~{request.affected_population:,} people")
-    if request.demand_delta_pct:
-        context_parts.append(f"{request.demand_delta_pct}% demand increase")
-    crisis_context = ", ".join(context_parts) if context_parts else ""
 
-    # Check if we have OAuth tokens
-    if not await _hex_client.is_authenticated():
-        logger.warning("Hex OAuth tokens not found — returning fallback response")
-        return FollowupResponse(
-            answer=(
-                "Hex Threads is not yet configured. "
-                "Run 'python scripts/hex_oauth_setup.py' to authenticate."
-            ),
-            thread_url="",
-            thread_id=None,
-        )
+    crisis_summary = ", ".join(context_parts) if context_parts else "the current crisis"
 
-    # Call Hex Threads via MCP
-    try:
-        result = await _hex_client.ask(
-            question=request.question,
-            crisis_context=crisis_context,
-        )
-        return FollowupResponse(
-            answer=result["answer"],
-            thread_url=result.get("thread_url", ""),
-            thread_id=result.get("thread_id"),
-        )
-    except Exception as e:
-        logger.error("Hex Threads MCP error: %s", e, exc_info=True)
-        return FollowupResponse(
-            answer=f"Error connecting to Hex Threads: {e}",
-            thread_url="",
-            thread_id=None,
-        )
+    answer = (
+        f"I've opened Hex Threads in the Follow-up tab where you can explore "
+        f"data about {crisis_summary}. Hex's AI analyst will query the CrisisGrid "
+        f"database and generate charts for your question."
+    )
+
+    logger.info("Followup: question=%r, context=%s", request.question[:80], crisis_summary)
+
+    return FollowupResponse(
+        answer=answer,
+        thread_url=HEX_THREADS_URL,
+        thread_id=None,
+    )

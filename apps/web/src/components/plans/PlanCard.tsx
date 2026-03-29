@@ -62,7 +62,7 @@ export function PlanCard({ plan, isSelected, onSelect }: PlanCardProps) {
             </span>
           </div>
           <span className="font-mono font-bold tabular-nums text-lg text-slate-100">
-            {Math.round(plan.coverage_pct * 100)}%
+            {Math.round(plan.coverage_pct)}%
           </span>
         </div>
 

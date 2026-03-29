@@ -86,11 +86,12 @@ export function DashboardHeader({ selectedPlan }: DashboardHeaderProps) {
               </div>
             </div>
 
-            {/* Gauge — show projected score when a plan is selected */}
+            {/* Gauge — current score solid, projected improvement as glow */}
             <HealthGauge
-              score={selectedPlan
+              score={compositeScore}
+              projectedScore={selectedPlan
                 ? Math.min(compositeScore + (1 - compositeScore) * (selectedPlan.coverage_pct / 100) * 0.6, 0.98)
-                : compositeScore}
+                : undefined}
               size={56}
               strokeWidth={5}
             />
