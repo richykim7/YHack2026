@@ -68,8 +68,8 @@ async def _run_scope_stage(queue: asyncio.Queue, crisis_profile: CrisisProfile) 
     ))
 
 
-async def _run_assess_stage(queue: asyncio.Queue, profile: CrisisProfile) -> GapAnalysis:
-    """Stage 2: ASSESS -- local gap analysis + Hex trigger."""
+async def _run_assess_stage(queue: asyncio.Queue, profile: CrisisProfile) -> tuple[GapAnalysis, str]:
+    """Stage 2: ASSESS -- local gap analysis + Hex trigger. Returns (gap, hex_assess_url)."""
     await _emit(queue, AssessStartEvent(timestamp=time.time()))
 
     # Local gap analysis (deterministic, instant)
@@ -88,6 +88,7 @@ async def _run_assess_stage(queue: asyncio.Queue, profile: CrisisProfile) -> Gap
     ))
 
     # Hex ASSESS trigger (non-blocking)
+    hex_assess_url = ""
     if HEX_ASSESS_PROJECT_ID:
         try:
             result = await trigger_hex_run(
@@ -101,14 +102,15 @@ async def _run_assess_stage(queue: asyncio.Queue, profile: CrisisProfile) -> Gap
                     "affected_population": profile.affected_population,
                 },
             )
+            hex_assess_url = result["run_url"]
             await _emit(queue, HexAssessReadyEvent(
-                run_url=result["run_url"],
+                run_url=hex_assess_url,
                 timestamp=time.time(),
             ))
         except Exception as e:
             logger.warning("Hex ASSESS trigger failed: %s", e)
 
-    return gap
+    return gap, hex_assess_url
 
 
 async def _run_discover_stage(queue: asyncio.Queue, gap: GapAnalysis, profile: CrisisProfile) -> list[dict]:
@@ -129,8 +131,8 @@ async def _run_discover_stage(queue: asyncio.Queue, gap: GapAnalysis, profile: C
     return source_dicts
 
 
-async def _run_optimize_stage(queue: asyncio.Queue, gap: GapAnalysis, sources: list[dict], profile: CrisisProfile) -> list[dict]:
-    """Stage 4: OPTIMIZE -- generate 3 response plans + trigger Hex Plans."""
+async def _run_optimize_stage(queue: asyncio.Queue, gap: GapAnalysis, sources: list[dict], profile: CrisisProfile) -> tuple[list[dict], str]:
+    """Stage 4: OPTIMIZE -- generate 3 response plans + trigger Hex Plans. Returns (plan_dicts, hex_plans_url)."""
     await _emit(queue, OptimizeStartEvent(timestamp=time.time()))
 
     source_objs = [SourceOption(**s) for s in sources]
@@ -143,14 +145,16 @@ async def _run_optimize_stage(queue: asyncio.Queue, gap: GapAnalysis, sources: l
     ))
 
     # Hex Plans trigger (non-blocking -- skip on failure per D-14)
+    hex_plans_url = ""
     if HEX_PLANS_PROJECT_ID and plan_dicts:
         try:
             result = await trigger_plans_run(plan_dicts, profile.model_dump())
-            await _emit(queue, HexPlansReadyEvent(run_url=result["run_url"], timestamp=time.time()))
+            hex_plans_url = result.get("run_url", "")
+            await _emit(queue, HexPlansReadyEvent(run_url=hex_plans_url, timestamp=time.time()))
         except Exception as e:
             logger.warning("Hex Plans trigger failed: %s", e)
 
-    return plan_dicts
+    return plan_dicts, hex_plans_url
 
 
 def _audit(agent: str, action: str, start_time: float, **kwargs) -> dict:
@@ -195,7 +199,7 @@ async def run_pipeline(session_id: str, crisis_profile: dict):
 
         # Stage 2: ASSESS (local gap analysis + Hex)
         assess_start = time.time()
-        gap = await _run_assess_stage(queue, profile)
+        gap, hex_assess_url = await _run_assess_stage(queue, profile)
         audit_log.append(_audit("assess", "complete", assess_start, output_summary=f"{len(gap.gaps_by_category)} categories analyzed, {gap.expiration_risk_lbs:.0f} lbs at risk"))
 
         # Stage 3: DISCOVER (find sourcing options)
@@ -205,7 +209,7 @@ async def run_pipeline(session_id: str, crisis_profile: dict):
 
         # Stage 4: OPTIMIZE (generate response plans)
         optimize_start = time.time()
-        plans = await _run_optimize_stage(queue, gap, sources, profile)
+        plans, hex_plans_url = await _run_optimize_stage(queue, gap, sources, profile)
         audit_log.append(_audit("optimize", "complete", optimize_start, output_summary=f"{len(plans)} plans generated"))
 
         # Emit Lava usage costs (non-blocking, best-effort)
@@ -241,6 +245,8 @@ async def run_pipeline(session_id: str, crisis_profile: dict):
                     "audit_log": audit_log,
                     "pipeline_duration_ms": pipeline_duration_ms,
                     "pipeline_run_id": pipeline_run_id,
+                    "hex_assess_url": hex_assess_url if hex_assess_url else "",
+                    "hex_plans_url": hex_plans_url if hex_plans_url else "",
                 }, on_conflict="id").execute()
                 logger.info("Pipeline results stored in crisis_events (run_id=%s)", pipeline_run_id)
         except Exception as e:
