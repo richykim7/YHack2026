@@ -9,6 +9,8 @@ from pydantic import BaseModel
 
 from supabase import create_client
 
+from services.documents import generate_documents, GeneratedDocument
+
 logger = logging.getLogger(__name__)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
@@ -123,3 +125,43 @@ async def accept_plan(req: AcceptPlanRequest):
     except Exception as e:
         logger.error("Plan acceptance failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Plan acceptance failed: {str(e)}")
+
+
+@router.get("/{crisis_event_id}/documents")
+async def get_plan_documents(crisis_event_id: str):
+    """Generate order documents for an accepted plan.
+
+    Returns purchase orders (per supplier), transfer requests, and crisis summary.
+    All documents are template-based markdown -- no LLM needed.
+    """
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+    try:
+        # Fetch accepted plan from crisis_events
+        resp = supabase.table("crisis_events").select(
+            "response_plan, crisis_profile"
+        ).eq("id", crisis_event_id).single().execute()
+
+        if not resp.data or not resp.data.get("response_plan"):
+            raise HTTPException(status_code=404, detail="No accepted plan found for this crisis event")
+
+        plan = resp.data["response_plan"]
+        crisis_profile = resp.data.get("crisis_profile")
+
+        docs = generate_documents(crisis_event_id, plan, crisis_profile)
+
+        return {
+            "crisis_event_id": crisis_event_id,
+            "plan_name": plan.get("name", "unknown"),
+            "documents": [d.model_dump() for d in docs],
+            "count": len(docs),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Document generation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Document generation failed: {str(e)}")
