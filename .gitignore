@@ -4,3 +4,10 @@
 node_modules/
 __pycache__/
 *.pyc
+
+# Local-only docs
+CLAUDE.md
+ARCHITECTURE.md
+crisisgrid-architecture-proposal.md
+crisisgrid-overhaul-plan.md
+# CrisisGrid Phase 11A Data Pipelin.txt
