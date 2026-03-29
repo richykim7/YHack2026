@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import type { TabId, ResponsePlan, SelectedPlanState } from '@/lib/types';
+import type { TabId, ResponsePlan, SelectedPlanState, MonitorPost, MonitorClassification } from '@/lib/types';
 import { DashboardHeader } from './DashboardHeader';
 import { TabNavigation } from './TabNavigation';
 import { DashboardTab } from '@/components/dashboard/DashboardTab';
@@ -17,9 +17,12 @@ const CACHED_HEX_ASSESS_URL = process.env.NEXT_PUBLIC_HEX_ASSESS_CACHED_URL || n
 export function DashboardShell() {
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [tabKey, setTabKey] = useState(0);
-  const { events, isStreaming, isComplete, launchAndStream, plans, hexPlansUrl, hexAssessUrl, gapAnalysis } =
-    useCrisisStream();
+  const {
+    events, isStreaming, isComplete, launchAndStream, plans, hexPlansUrl, hexAssessUrl, gapAnalysis,
+    monitorPosts, classifications, crisisDetected, monitorMode, startMonitorAndStream,
+  } = useCrisisStream();
   const [selectedPlan, setSelectedPlan] = useState<SelectedPlanState>(null);
+  const [orchestratorSteps, setOrchestratorSteps] = useState<{ step: string; model: string; message: string }[]>([]);
   const { refetch: refetchCosts } = useLavaCosts();
 
   const effectiveHexUrl = hexAssessUrl || CACHED_HEX_ASSESS_URL;
@@ -50,6 +53,21 @@ export function DashboardShell() {
     }
   }, [isComplete, refetchCosts]);
 
+  // Extract orchestrator steps from activity events for MonitorFeed
+  useEffect(() => {
+    const steps = events
+      .filter(e => e.agent === 'orchestrator' && e.status === 'running')
+      .map(e => {
+        const msg = e.message || '';
+        return { step: msg, model: '', message: msg };
+      });
+    setOrchestratorSteps(steps);
+  }, [events]);
+
+  const handleStartMonitor = useCallback(async () => {
+    await startMonitorAndStream();
+  }, [startMonitorAndStream]);
+
   return (
     <div className="h-screen flex flex-col bg-slate-900 text-slate-100">
       <DashboardHeader selectedPlan={selectedPlan} />
@@ -64,6 +82,12 @@ export function DashboardShell() {
             onLaunchPipeline={handleLaunch}
             isStreaming={isStreaming}
             pipelineComplete={isComplete}
+            onStartMonitor={handleStartMonitor}
+            monitorPosts={monitorPosts}
+            classifications={classifications}
+            crisisDetected={crisisDetected}
+            monitorMode={monitorMode}
+            orchestratorSteps={orchestratorSteps}
           />
         </div>
         <div key={activeTab === 'map' ? `map-${tabKey}` : 'map'} className={activeTab === 'map' ? 'h-full animate-tab-in' : 'hidden'}>
