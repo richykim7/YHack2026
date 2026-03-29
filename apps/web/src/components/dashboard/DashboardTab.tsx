@@ -4,7 +4,7 @@ import { NetworkHero } from './NetworkHero';
 import { InventoryGauges } from './InventoryGauges';
 import { ChatSidebar } from './ChatSidebar';
 import { MonitorFeed } from './MonitorFeed';
-import { HexDashboard } from '@/components/hex/HexDashboard';
+import { DemandTrendChart } from '@/components/dashboard/DemandTrendChart';
 import { SiteSelector } from '@/components/ui/SiteSelector';
 import { Radio } from 'lucide-react';
 import { useSites } from '@/hooks/useSites';
@@ -78,24 +78,12 @@ export function DashboardTab({
           />
         </div>
 
-        {/* Network Analytics (History) -- per D-04 */}
+        {/* Weekly Demand Trend -- replaced Hex History placeholder */}
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
           <h2 className="text-sm font-display font-bold text-slate-300 uppercase tracking-widest mb-3">
-            Network Analytics
+            Weekly Demand Trend
           </h2>
-          <HexDashboard
-            title="CrisisGrid History"
-            runUrl={null}
-            isLoading={false}
-            isError={false}
-            height={350}
-            fallback={
-              <div className="text-sm text-slate-500 py-8 text-center">
-                <p>Historical analytics will appear here when Hex is configured.</p>
-                <p className="text-xs mt-1">Set HEX_HISTORY_PROJECT_ID to enable.</p>
-              </div>
-            }
-          />
+          <DemandTrendChart />
         </div>
       </div>
 

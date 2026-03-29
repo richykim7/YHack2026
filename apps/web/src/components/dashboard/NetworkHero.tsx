@@ -1,5 +1,5 @@
 'use client';
-import { Package, Warehouse, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Package, Warehouse, TrendingUp, Activity } from 'lucide-react';
 import { useSites } from '@/hooks/useSites';
 import { useInventory } from '@/hooks/useInventory';
 
@@ -37,7 +37,18 @@ export function NetworkHero() {
   const fillPct = totalTargetLbs > 0 ? (totalInventoryLbs / totalTargetLbs) * 100 : 0;
   const healthySites = sites.filter(s => s.health_score >= 0.7).length;
   const criticalSites = sites.filter(s => s.health_score < 0.5).length;
-  const totalPop = sites.reduce((sum, s) => sum + (s.serves_population ?? 0), 0);
+
+  // Network Health: weighted average by serves_population
+  const totalWeight = sites.reduce((sum, s) => sum + (s.serves_population ?? 1), 0);
+  const avgHealth = totalWeight > 0
+    ? sites.reduce((sum, s) => sum + s.health_score * (s.serves_population ?? 1), 0) / totalWeight
+    : 0;
+  const healthPct = Math.round(avgHealth * 100);
+  const healthColor = healthPct >= 75 ? 'text-emerald-400' : healthPct >= 50 ? 'text-amber-400' : 'text-red-400';
+
+  // Population: distribution sites only
+  const distSites = sites.filter(s => s.type === 'distribution_site');
+  const distPop = distSites.reduce((sum, s) => sum + (s.serves_population ?? 0), 0);
 
   if (loading) {
     return (
@@ -62,62 +73,43 @@ export function NetworkHero() {
       className="rounded-xl border border-slate-700/50 p-5"
       style={{ background: 'linear-gradient(135deg, #141e2e 0%, #0f172a 60%, #1a1528 100%)' }}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <StatCard
-            icon={<Package size={16} className="text-blue-400" />}
-            label="Total Inventory"
-            value={`${(totalInventoryLbs / 1000).toFixed(1)}k`}
-            sub={`${fillPct.toFixed(0)}% of target`}
-            accent="text-slate-100"
-          />
+      <div className="flex items-center gap-8">
+        <StatCard
+          icon={<Package size={16} className="text-blue-400" />}
+          label="Total Inventory"
+          value={`${(totalInventoryLbs / 1000).toFixed(1)}k`}
+          sub={`${fillPct.toFixed(0)}% of target`}
+          accent="text-slate-100"
+        />
 
-          <div className="w-px h-10 bg-slate-700/50" />
+        <div className="w-px h-10 bg-slate-700/50" />
 
-          <StatCard
-            icon={<Warehouse size={16} className="text-emerald-400" />}
-            label="Sites Online"
-            value={`${healthySites}/${sites.length}`}
-            sub={criticalSites > 0 ? `${criticalSites} critical` : 'All operational'}
-            accent={criticalSites > 0 ? 'text-amber-400' : 'text-emerald-400'}
-          />
+        <StatCard
+          icon={<Warehouse size={16} className={criticalSites > 0 ? 'text-amber-400' : 'text-emerald-400'} />}
+          label="Site Status"
+          value={`${healthySites} Healthy`}
+          sub={criticalSites > 0 ? `${criticalSites} Critical` : 'All Stable'}
+          accent={criticalSites > 0 ? 'text-amber-400' : 'text-emerald-400'}
+        />
 
-          <div className="w-px h-10 bg-slate-700/50" />
+        <div className="w-px h-10 bg-slate-700/50" />
 
-          <StatCard
-            icon={<TrendingUp size={16} className="text-violet-400" />}
-            label="Population Served"
-            value={totalPop > 0 ? `${(totalPop / 1000).toFixed(0)}k` : '--'}
-            accent="text-slate-100"
-          />
+        <StatCard
+          icon={<TrendingUp size={16} className="text-violet-400" />}
+          label="Population Served"
+          value={distPop > 0 ? `${Math.round(distPop / 1000)}K` : '--'}
+          sub="People in Service Area"
+          accent="text-slate-100"
+        />
 
-          {criticalSites > 0 && (
-            <>
-              <div className="w-px h-10 bg-slate-700/50" />
-              <StatCard
-                icon={<AlertTriangle size={16} className="text-red-400" />}
-                label="Needs Attention"
-                value={`${criticalSites}`}
-                sub={`site${criticalSites > 1 ? 's' : ''} below 50%`}
-                accent="text-red-400"
-              />
-            </>
-          )}
-        </div>
+        <div className="w-px h-10 bg-slate-700/50" />
 
-        {/* Mini fill bar */}
-        <div className="flex flex-col items-end gap-1 min-w-[120px]">
-          <span className="text-[10px] font-display font-semibold text-slate-500 uppercase tracking-widest">Network Fill</span>
-          <div className="w-full h-2 bg-slate-700/40 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-700 ${
-                fillPct >= 70 ? 'bg-emerald-400' : fillPct >= 40 ? 'bg-amber-400' : 'bg-red-400'
-              }`}
-              style={{ width: `${Math.min(100, fillPct)}%` }}
-            />
-          </div>
-          <span className="text-xs font-mono text-slate-400 tabular-nums">{fillPct.toFixed(0)}%</span>
-        </div>
+        <StatCard
+          icon={<Activity size={16} className={healthColor} />}
+          label="Network Health"
+          value={`${healthPct}%`}
+          accent={healthColor}
+        />
       </div>
     </div>
   );
