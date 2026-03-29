@@ -160,6 +160,13 @@ async def run_pipeline(session_id: str, crisis_profile: dict):
     """
     queue = get_event_queue(session_id)
 
+    # Reset per-agent cost tracking for this pipeline run
+    try:
+        from routers.lava import reset_agent_costs
+        reset_agent_costs()
+    except Exception:
+        pass
+
     try:
         # Parse crisis profile from dict
         profile = CrisisProfile(**crisis_profile)
