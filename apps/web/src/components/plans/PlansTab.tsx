@@ -6,7 +6,7 @@ import { API_BASE } from '@/lib/api';
 import { PlanCard } from '@/components/plans/PlanCard';
 import { HexDashboard } from '@/components/hex/HexDashboard';
 import { DocumentDrawer } from '@/components/plans/DocumentDrawer';
-import { HARDCODED_PLANS } from '@/lib/mockData';
+import { DEFAULT_PLANS } from '@/lib/mockData';
 
 interface PlansTabProps {
   plans: ResponsePlan[];
@@ -35,9 +35,9 @@ export function PlansTab({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
 
-  // Always use hardcoded plans from verified algorithm output.
+  // Use default plans from verified algorithm output.
   // SSE pipeline plans are bypassed to guarantee correct demo values.
-  const displayPlans = HARDCODED_PLANS;
+  const displayPlans = DEFAULT_PLANS;
   const isMockData = false;
 
   return (

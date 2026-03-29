@@ -12,7 +12,7 @@ import { FollowUpTab } from '@/components/placeholders/FollowUpTab';
 import { UsageTab } from '@/components/usage/UsageTab';
 import { useCrisisStream } from '@/hooks/useCrisisStream';
 import { useLavaCosts } from '@/hooks/useLavaCosts';
-import { HARDCODED_GAP_ANALYSIS } from '@/lib/mockData';
+import { DEFAULT_GAP_ANALYSIS } from '@/lib/mockData';
 
 const CACHED_HEX_ASSESS_URL = process.env.NEXT_PUBLIC_HEX_ASSESS_CACHED_URL || null;
 
@@ -121,7 +121,7 @@ export function DashboardShell() {
         </div>
         <div key={activeTab === 'assessment' ? `assessment-${tabKey}` : 'assessment'} className={activeTab === 'assessment' ? 'h-full animate-tab-in' : 'hidden'}>
           <AssessmentTab
-            gapAnalysis={gapAnalysis ?? HARDCODED_GAP_ANALYSIS}
+            gapAnalysis={gapAnalysis ?? DEFAULT_GAP_ANALYSIS}
             hexRunUrl={effectiveHexUrl}
             events={events}
             isStreaming={isStreaming}

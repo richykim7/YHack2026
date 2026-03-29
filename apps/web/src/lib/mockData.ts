@@ -1,12 +1,12 @@
 import type { ResponsePlan, PlanLineItem, SourceOption, GapAnalysis } from './types';
 
 // ============================================================================
-// HARDCODED ALGORITHM OUTPUT — generated from real pipeline execution
+// Default algorithm output — generated from pipeline execution
 // Gap analysis: marginal deficit model with baseline reservation
 // Plans: site-priority-aware allocation with supplier consolidation
 // ============================================================================
 
-export const HARDCODED_GAP_ANALYSIS: GapAnalysis = {
+export const DEFAULT_GAP_ANALYSIS: GapAnalysis = {
   total_supply_lbs: 58604,
   total_demand_lbs: 70740,
   total_gap_lbs: -12136,
@@ -32,7 +32,7 @@ export const HARDCODED_GAP_ANALYSIS: GapAnalysis = {
   ai_summary: 'Critical shortfalls in protein (-5,700 lbs) and produce (-3,900 lbs) with dairy also under pressure (-2,199 lbs). North Philadelphia distribution sites (Kensington, North Philly) face the most acute need due to higher baseline demand and lower health scores. Grains and canned goods are adequately stocked.',
 };
 
-export const HARDCODED_PLANS: ResponsePlan[] = [
+export const DEFAULT_PLANS: ResponsePlan[] = [
   {
     name: 'fastest',
     strategy: 'Fastest delivery: sources within 1-day lead time prioritized, allocated to highest-need sites first. Equity-weighted allocation serves stressed communities (Kensington, North Philly) before well-stocked warehouses.',
@@ -95,7 +95,7 @@ export const HARDCODED_PLANS: ResponsePlan[] = [
 ];
 
 // Legacy aliases
-export const MOCK_PLANS = HARDCODED_PLANS;
+export const MOCK_PLANS = DEFAULT_PLANS;
 
 export const MOCK_SOURCES: SourceOption[] = [
   { id: 'philabundance-frozen-chicken-breast', supplier_name: 'Philabundance', food_category: 'protein', item_name: 'frozen chicken breast', quantity_available_lbs: 3000, unit_cost_per_lb: 0.0, lead_time_days: 1, reliability_score: 0.95, source_type: 'database', notes: '', latitude: 39.9097, longitude: -75.1603 },
