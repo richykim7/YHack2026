@@ -182,6 +182,32 @@ class CrisisProfileReadyEvent(BaseModel):
     timestamp: float
 
 
+class ApiCallEvent(BaseModel):
+    """Emitted after every external API call (web search, etc.) for auditability."""
+    type: Literal["api_call"] = "api_call"
+    agent: str            # "discover", "researcher"
+    service: str          # "serper", "supabase", etc.
+    request_summary: str  # What was sent (query, URL, etc.)
+    response_summary: str # What came back (truncated)
+    result_count: int = 0
+    duration_ms: int = 0
+    timestamp: float
+
+
+class LlmCallEvent(BaseModel):
+    """Emitted after every LLM invocation for full auditability."""
+    type: Literal["llm_call"] = "llm_call"
+    agent: str            # "monitor", "researcher", "profiler", "assess"
+    model: str            # "gemini-2.5-flash", "gpt-4.1-mini", etc.
+    prompt_text: str      # Full prompt sent to the model (truncated at 2000 chars)
+    response_text: str    # Full response content (truncated at 5000 chars)
+    tool_args: dict | None = None  # If tool calling, the extracted args
+    input_tokens: int = 0
+    output_tokens: int = 0
+    duration_ms: int = 0
+    timestamp: float
+
+
 # === Union of ALL event types ===
 
 SSEEvent = Union[
@@ -211,6 +237,8 @@ SSEEvent = Union[
     OrchestratorStartEvent,
     OrchestratorStepEvent,
     CrisisProfileReadyEvent,
+    ApiCallEvent,
+    LlmCallEvent,
 ]
 
 # All valid event type strings (for reference)
@@ -224,6 +252,7 @@ ALL_EVENT_TYPES = [
     "pipeline_complete", "plan_accepted", "lava_usage",
     "monitor_post", "monitor_classification", "crisis_detected",
     "orchestrator_start", "orchestrator_step", "crisis_profile_ready",
+    "api_call", "llm_call",
 ]
 
 

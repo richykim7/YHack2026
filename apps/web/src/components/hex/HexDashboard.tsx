@@ -17,7 +17,7 @@ export function HexDashboard({
   isLoading,
   isError,
   fallback,
-  height = 500,
+  height = 800,
 }: HexDashboardProps) {
   // Loading state: show skeleton
   if (isLoading && !runUrl) {

@@ -493,14 +493,16 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
       const MAX_DOTS = 6;
 
       const routeMeta: { coords: [number, number][]; type: string; len: number; dotCount: number; cycleMs: number }[] =
-        routeFeatures.map(f => {
-          const coords = f.geometry.coordinates as [number, number][];
-          const type = (f.properties?.route_type as string) ?? 'delivery';
-          const len = pathLength(coords);
-          const cycleMs = (len / SPEED) * 1000; // time for one full traversal
-          const dotCount = Math.max(MIN_DOTS, Math.min(MAX_DOTS, Math.round(len / DOT_SPACING)));
-          return { coords, type, len, dotCount, cycleMs };
-        });
+        routeFeatures
+          .filter(f => (f.geometry.coordinates as [number, number][]).length >= 2)
+          .map(f => {
+            const coords = f.geometry.coordinates as [number, number][];
+            const type = (f.properties?.route_type as string) ?? 'delivery';
+            const len = pathLength(coords);
+            const cycleMs = Math.max((len / SPEED) * 1000, 1); // time for one full traversal, min 1ms to avoid division by zero
+            const dotCount = Math.max(MIN_DOTS, Math.min(MAX_DOTS, Math.round(len / DOT_SPACING)));
+            return { coords, type, len, dotCount, cycleMs };
+          });
 
       // Build dot features — variable count per route
       const dotFeatures: GeoJSON.Feature<GeoJSON.Point>[] = [];
@@ -585,6 +587,7 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
           const frac = exact - segIdx;
           const a = path[segIdx];
           const b = path[segIdx + 1];
+          if (!a || !b) continue;
           dotFeatures[i].geometry.coordinates = [
             a[0] + (b[0] - a[0]) * frac,
             a[1] + (b[1] - a[1]) * frac,

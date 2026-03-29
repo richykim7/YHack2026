@@ -106,7 +106,9 @@ export type SSEEventType =
   | 'orchestrator_start'
   | 'orchestrator_step'
   | 'crisis_profile_ready'
-  | 'plan_accepted';
+  | 'plan_accepted'
+  | 'llm_call'
+  | 'api_call';
 
 export interface SSEEvent {
   type: SSEEventType;
@@ -136,9 +138,39 @@ export interface SSEEvent {
   // Phase 14: Pipeline run tracking
   pipeline_run_id?: string;
   pipeline_duration_ms?: number;
+  // LLM call audit fields
+  prompt_text?: string;
+  response_text?: string;
+  tool_args?: Record<string, unknown> | null;
+  input_tokens?: number;
+  output_tokens?: number;
+  duration_ms?: number;
+  // API call audit fields
+  service?: string;
+  request_summary?: string;
+  response_summary?: string;
+  result_count?: number;
 }
 
 export type AgentStatus = 'pending' | 'running' | 'complete' | 'error';
+
+export interface LlmCallDetail {
+  model: string;
+  promptText: string;
+  responseText: string;
+  toolArgs?: Record<string, unknown> | null;
+  inputTokens: number;
+  outputTokens: number;
+  durationMs: number;
+}
+
+export interface ApiCallDetail {
+  service: string;
+  requestSummary: string;
+  responseSummary: string;
+  resultCount: number;
+  durationMs: number;
+}
 
 export interface AgentActivity {
   id: string;
@@ -146,6 +178,8 @@ export interface AgentActivity {
   status: AgentStatus;
   message?: string;
   timestamp: number;
+  llmDetail?: LlmCallDetail;
+  apiDetail?: ApiCallDetail;
 }
 
 // Phase 3: ASSESS pipeline types

@@ -123,7 +123,7 @@ export function PlansTab({
             Plans visualization available after Hex notebook completes.
           </div>
         }
-        height={500}
+        height={800}
       />
 
       {/* Document drawer */}

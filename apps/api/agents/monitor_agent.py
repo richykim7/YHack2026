@@ -20,6 +20,7 @@ from models.events import (
     MonitorClassificationEvent,
     CrisisDetectedEvent,
     ErrorEvent,
+    LlmCallEvent,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,32 +48,52 @@ Consider irrelevant: general news, sports, restaurants, events not related to fo
 You MUST call the classify_crisis_relevance tool with your assessment."""
 
 
-async def classify_post(post: MonitorPost) -> dict:
+async def classify_post(post: MonitorPost, queue: asyncio.Queue | None = None) -> dict:
     """Classify a single post via LLM with tool calling.
 
     Returns dict with {relevant: bool, confidence: float, reason: str}.
     """
+    from agents.gateway import MODEL_MAP
     llm = get_llm("monitor")
     llm_with_tools = llm.bind_tools([classify_crisis_relevance], tool_choice="any")
 
+    human_content = f"[{post.source}] @{post.author}: {post.content}"
     messages = [
         SystemMessage(content=CLASSIFY_SYSTEM_PROMPT),
-        HumanMessage(content=f"[{post.source}] @{post.author}: {post.content}"),
+        HumanMessage(content=human_content),
     ]
 
+    start = time.time()
     response = await llm_with_tools.ainvoke(messages)
+    duration_ms = int((time.time() - start) * 1000)
 
     # Extract structured output from tool call (per scope_agent.py pattern)
+    tool_args = None
     if response.tool_calls:
         args = response.tool_calls[0]["args"]
-        return {
+        tool_args = args
+        result = {
             "relevant": bool(args.get("relevant", False)),
             "confidence": float(args.get("confidence", 0.0)),
             "reason": str(args.get("reason", "")),
         }
+    else:
+        result = {"relevant": False, "confidence": 0.0, "reason": "Classification failed"}
 
-    # Fallback if tool calling fails (shouldn't happen with tool_choice="any")
-    return {"relevant": False, "confidence": 0.0, "reason": "Classification failed"}
+    # Emit LLM call event for auditability
+    if queue:
+        response_text = response.content if isinstance(response.content, str) else str(response.content)
+        await _emit(queue, LlmCallEvent(
+            agent="monitor",
+            model=MODEL_MAP.get("monitor", "gemini-2.5-flash"),
+            prompt_text=f"[System] {CLASSIFY_SYSTEM_PROMPT[:500]}\n[Human] {human_content}"[:2000],
+            response_text=(response_text or str(tool_args))[:5000],
+            tool_args=tool_args,
+            duration_ms=duration_ms,
+            timestamp=time.time(),
+        ))
+
+    return result
 
 
 async def run_monitor(session_id: str):
@@ -94,7 +115,7 @@ async def run_monitor(session_id: str):
             ))
 
             # Classify via LLM (every post hits the LLM)
-            classification = await classify_post(post)
+            classification = await classify_post(post, queue=queue)
 
             await _emit(queue, MonitorClassificationEvent(
                 post_id=post.id,

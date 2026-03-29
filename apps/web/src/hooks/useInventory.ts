@@ -10,14 +10,14 @@ export interface CategoryTotal {
   targetLbs: number;
 }
 
-// 2-week supply targets per category (rough estimates for demo)
+// 2-week supply targets per category (based on avg weekly demand × 2)
 const NETWORK_TARGET_LBS: Record<FoodCategory, number> = {
-  protein: 8000,
-  grains: 10000,
-  dairy: 6000,
-  produce: 7000,
-  canned: 9000,
-  beverages: 5000,
+  protein: 19000,
+  grains: 15000,
+  dairy: 10000,
+  produce: 13000,
+  canned: 14000,
+  beverages: 7600,
 };
 
 export function useInventory(siteId?: string | null) {

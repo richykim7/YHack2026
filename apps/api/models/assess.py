@@ -24,6 +24,13 @@ class GapAnalysis(BaseModel):
     site_health_scores: dict[str, float]  # site_id -> score
     ai_summary: str  # AI-generated 1-2 sentence summary
 
+    # Per-site marginal need (site_id -> {category -> lbs_needed})
+    per_site_needs: dict[str, dict[str, float]] = {}
+    # Equity-weighted priority shares (site_id -> normalized_priority, sums to 1.0)
+    site_priorities: dict[str, float] = {}
+    # Network-wide total marginal need in lbs
+    network_total_need_lbs: float = 0.0
+
 
 class HexRunResult(BaseModel):
     """Result of triggering a Hex project run."""

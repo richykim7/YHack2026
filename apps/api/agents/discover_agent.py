@@ -1,8 +1,8 @@
-"""DISCOVER agent: dual-channel source discovery (DB + Tavily web search).
+"""DISCOVER agent: dual-channel source discovery (DB + Serper web search).
 
 Finds sourcing options matching deficit categories from:
 1. Supabase supplier_catalog table (reliable, structured data)
-2. Tavily web search (broader reach, sensible defaults)
+2. Serper web search via Lava forward proxy (broader reach, sensible defaults)
 
 Deduplicates results with DB sources winning on conflict.
 """
@@ -10,6 +10,7 @@ Deduplicates results with DB sources winning on conflict.
 import asyncio
 import logging
 import os
+import time
 import uuid
 from typing import Awaitable, Callable
 
@@ -17,6 +18,7 @@ from supabase import create_client
 
 from models.assess import GapAnalysis
 from models.crisis import CrisisProfile, SourceOption
+from models.events import ApiCallEvent
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +30,15 @@ async def discover_sources(
     gap: GapAnalysis,
     profile: CrisisProfile,
     on_source_found: Callable[[SourceOption], Awaitable[None]] | None = None,
+    queue: asyncio.Queue | None = None,
 ) -> list[SourceOption]:
-    """Discover sourcing options via dual-channel: DB + Tavily web search.
+    """Discover sourcing options via dual-channel: DB + Serper web search.
 
     Args:
         gap: Gap analysis with per-category deficits.
         profile: Crisis profile with geography and context.
         on_source_found: Optional async callback invoked per source for SSE streaming.
+        queue: Optional SSE event queue for emitting audit events.
 
     Returns:
         Deduplicated list of SourceOption, DB sources winning on conflict.
@@ -47,13 +51,26 @@ async def discover_sources(
         logger.info("No deficit categories found, skipping discovery")
         return []
 
-    # Run DB and Tavily concurrently
+    # Run DB and Serper concurrently
     db_task = asyncio.to_thread(
         _query_supplier_catalog, deficit_categories, profile
     )
-    tavily_task = _search_web_via_lava(deficit_categories, profile.geography)
+    web_task = _search_web_via_lava(deficit_categories, profile.geography, queue=queue)
 
-    db_sources, web_sources = await asyncio.gather(db_task, tavily_task)
+    db_sources, web_sources = await asyncio.gather(db_task, web_task)
+
+    # Emit DB query audit event
+    if queue:
+        from agents.pipeline import _emit
+        await _emit(queue, ApiCallEvent(
+            agent="discover",
+            service="supabase",
+            request_summary=f"SELECT supplier_catalog WHERE food_category IN ({', '.join(deficit_categories)})",
+            response_summary=f"{len(db_sources)} suppliers found: {', '.join(s.supplier_name for s in db_sources[:5])}",
+            result_count=len(db_sources),
+            duration_ms=0,
+            timestamp=time.time(),
+        ))
 
     # Stream DB sources via callback
     if on_source_found:
@@ -178,20 +195,23 @@ def _row_to_source_option(row: dict) -> SourceOption | None:
 
 
 async def _search_web_via_lava(
-    categories: list[str], geography: str
+    categories: list[str], geography: str, queue: asyncio.Queue | None = None,
 ) -> list[SourceOption]:
     """Search for emergency food suppliers via Serper (through Lava managed proxy).
 
     Lava proxies to Serper (Google Search) with managed billing — no separate
-    Serper or Tavily API key needed, just LAVA_API_TOKEN.
+    Serper or Tavily API key needed, just LAVA_SPEND_KEY.
 
     Args:
         categories: Food categories to search for.
         geography: Geographic region for the search query.
+        queue: Optional SSE event queue for emitting audit events.
 
     Returns:
         List of SourceOption from web search (max 5 total).
     """
+    # Forward proxy requires the admin API token, not the spend key
+    # (spend keys can't be used on /v1/forward — Lava returns 401)
     lava_token = os.environ.get("LAVA_API_TOKEN", "")
     if not lava_token:
         logger.warning("LAVA_API_TOKEN not set, skipping web search")
@@ -199,6 +219,7 @@ async def _search_web_via_lava(
 
     try:
         import httpx
+        from agents.pipeline import _emit
 
         sources: list[SourceOption] = []
         serper_url = (
@@ -211,25 +232,42 @@ async def _search_web_via_lava(
                 if len(sources) >= 5:
                     break
 
+                query = f"emergency food supplier {cat} {geography}"
+                start = time.time()
                 resp = await client.post(
                     serper_url,
-                    json={
-                        "q": f"emergency food supplier {cat} {geography}",
-                        "num": 2,
-                    },
+                    json={"q": query, "num": 2},
                     headers={
                         "Authorization": f"Bearer {lava_token}",
                         "Content-Type": "application/json",
                     },
                     timeout=10.0,
                 )
+                duration_ms = int((time.time() - start) * 1000)
                 data = resp.json()
 
+                results_found = []
                 for result in data.get("organic", []):
                     if len(sources) >= 5:
                         break
                     src = _web_result_to_source_option(result, cat)
                     sources.append(src)
+                    results_found.append(f"{result.get('title', '?')[:60]}")
+
+                # Emit audit event for this search query
+                if queue:
+                    await _emit(queue, ApiCallEvent(
+                        agent="discover",
+                        service="serper",
+                        request_summary=f"Google Search: \"{query}\"",
+                        response_summary="\n".join(
+                            f"- {r.get('title','')}: {r.get('snippet','')[:120]}"
+                            for r in data.get("organic", [])[:3]
+                        )[:2000] or "(no results)",
+                        result_count=len(data.get("organic", [])),
+                        duration_ms=duration_ms,
+                        timestamp=time.time(),
+                    ))
 
         logger.info("Serper/Lava returned %d web sources", len(sources))
         return sources

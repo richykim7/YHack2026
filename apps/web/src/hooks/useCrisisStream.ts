@@ -1,6 +1,6 @@
 'use client';
 import { useState, useCallback, useRef } from 'react';
-import type { SSEEvent, AgentActivity, AgentStatus, SourceOption, ResponsePlan, LavaCostBreakdown, GapAnalysis, MonitorPost, MonitorClassification } from '@/lib/types';
+import type { SSEEvent, AgentActivity, AgentStatus, LlmCallDetail, ApiCallDetail, SourceOption, ResponsePlan, LavaCostBreakdown, GapAnalysis, MonitorPost, MonitorClassification } from '@/lib/types';
 import { API_BASE, postJSON } from '@/lib/api';
 
 function getDefaultMessage(event: SSEEvent): string {
@@ -26,6 +26,8 @@ function getDefaultMessage(event: SSEEvent): string {
     case 'orchestrator_step': return event.message || `Running ${event.step}...`;
     case 'crisis_profile_ready': return 'Crisis profile assembled. Launching pipeline.';
     case 'plan_accepted': return 'Response plan accepted.';
+    case 'llm_call': return `LLM call to ${event.model || 'unknown'} (${event.agent || 'agent'}) — ${event.duration_ms || 0}ms`;
+    case 'api_call': return `${event.service || 'API'} call (${event.agent || 'agent'}) — ${event.result_count || 0} results, ${event.duration_ms || 0}ms`;
     default: return '';
   }
 }
@@ -60,6 +62,8 @@ function eventToActivity(event: SSEEvent): AgentActivity {
     orchestrator_step: 'orchestrator',
     crisis_profile_ready: 'orchestrator',
     plan_accepted: 'pipeline',
+    llm_call: event.agent || 'pipeline',
+    api_call: event.agent || 'pipeline',
   };
 
   const statusMap: Record<string, AgentStatus> = {
@@ -90,15 +94,43 @@ function eventToActivity(event: SSEEvent): AgentActivity {
     orchestrator_step: 'running',
     crisis_profile_ready: 'complete',
     plan_accepted: 'complete',
+    llm_call: 'complete',
+    api_call: 'complete',
   };
 
-  return {
+  const activity: AgentActivity = {
     id: crypto.randomUUID(),
-    agent: agentMap[event.type] || 'pipeline',
+    agent: agentMap[event.type] || event.agent || 'pipeline',
     status: statusMap[event.type] || 'pending',
     message: event.message || getDefaultMessage(event),
     timestamp: event.timestamp * 1000, // Python sends seconds, JS expects ms
   };
+
+  // Attach LLM call detail for auditability
+  if (event.type === 'llm_call') {
+    activity.llmDetail = {
+      model: event.model || '',
+      promptText: event.prompt_text || '',
+      responseText: event.response_text || '',
+      toolArgs: event.tool_args || null,
+      inputTokens: event.input_tokens || 0,
+      outputTokens: event.output_tokens || 0,
+      durationMs: event.duration_ms || 0,
+    };
+  }
+
+  // Attach API call detail for auditability
+  if (event.type === 'api_call') {
+    activity.apiDetail = {
+      service: event.service || '',
+      requestSummary: event.request_summary || '',
+      responseSummary: event.response_summary || '',
+      resultCount: event.result_count || 0,
+      durationMs: event.duration_ms || 0,
+    };
+  }
+
+  return activity;
 }
 
 export function useCrisisStream() {

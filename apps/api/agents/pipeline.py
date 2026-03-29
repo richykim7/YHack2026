@@ -22,6 +22,7 @@ from models.events import (
     PipelineCompleteEvent,
     LavaUsageEvent,
     ErrorEvent,
+    LlmCallEvent,
 )
 from services.gap_analysis import compute_gap_locally
 from services.hex_client import (
@@ -76,11 +77,23 @@ async def _run_assess_stage(queue: asyncio.Queue, profile: CrisisProfile) -> tup
     gap = await compute_gap_locally(profile)
 
     # AI summary (import inline to avoid circular)
+    llm_meta: dict = {}
     try:
         from routers.assess import generate_ai_summary
-        gap.ai_summary = await generate_ai_summary(gap, profile)
+        gap.ai_summary, llm_meta = await generate_ai_summary(gap, profile)
     except Exception as e:
         logger.warning("AI summary failed in pipeline: %s", e)
+
+    # Emit LLM call event for auditability
+    if llm_meta:
+        await _emit(queue, LlmCallEvent(
+            agent=llm_meta.get("agent", "assess"),
+            model=llm_meta.get("model", ""),
+            prompt_text=llm_meta.get("prompt_text", ""),
+            response_text=llm_meta.get("response_text", ""),
+            duration_ms=llm_meta.get("duration_ms", 0),
+            timestamp=time.time(),
+        ))
 
     await _emit(queue, AssessCompleteEvent(
         gap_analysis=gap.model_dump(),
@@ -114,13 +127,13 @@ async def _run_assess_stage(queue: asyncio.Queue, profile: CrisisProfile) -> tup
 
 
 async def _run_discover_stage(queue: asyncio.Queue, gap: GapAnalysis, profile: CrisisProfile) -> list[dict]:
-    """Stage 3: DISCOVER -- find sourcing options via DB + Tavily."""
+    """Stage 3: DISCOVER -- find sourcing options via DB + Serper web search."""
     await _emit(queue, DiscoverStartEvent(timestamp=time.time()))
 
     async def on_found(src: SourceOption) -> None:
         await _emit(queue, SourceFoundEvent(source=src.model_dump(), timestamp=time.time()))
 
-    sources = await discover_sources(gap, profile, on_source_found=on_found)
+    sources = await discover_sources(gap, profile, on_source_found=on_found, queue=queue)
     source_dicts = [s.model_dump() for s in sources]
 
     await _emit(queue, DiscoverCompleteEvent(

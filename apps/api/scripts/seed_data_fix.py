@@ -632,15 +632,16 @@ def step4_rebuild_inventory():
     sb.table("inventory").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
 
     # Target supply totals (network-wide)
-    # protein: 20,000 | grains: 26,000 | dairy: 11,000
-    # produce: 13,000 | canned: 24,000 | beverages: 8,500
+    # Reduced protein/produce/dairy to reflect realistic shortage
+    # vs 2-week demand targets: protein 19k, grains 15k, dairy 10k,
+    # produce 13k, canned 14k, beverages 7.6k
     supply_targets = {
-        "protein": 20000,
-        "grains": 26000,
-        "dairy": 11000,
-        "produce": 13000,
-        "canned": 24000,
-        "beverages": 8500,
+        "protein": 11400,   # 60% of 2-week target (amber)
+        "grains": 13500,    # 90% of 2-week target (green)
+        "dairy": 6800,      # 68% of 2-week target (amber)
+        "produce": 7800,    # 60% of 2-week target (amber)
+        "canned": 12600,    # 90% of 2-week target (green)
+        "beverages": 6500,  # 86% of 2-week target (green)
     }
 
     # Source type and cost by category

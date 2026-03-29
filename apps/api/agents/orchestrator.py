@@ -25,6 +25,8 @@ from models.events import (
     OrchestratorStartEvent,
     OrchestratorStepEvent,
     CrisisProfileReadyEvent,
+    LlmCallEvent,
+    ApiCallEvent,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,12 +36,14 @@ logger = logging.getLogger(__name__)
 # Step 1: Web Research via Serper / Lava forward proxy
 # ---------------------------------------------------------------------------
 
-async def _research_crisis(post_content: str) -> str:
+async def _research_crisis(post_content: str, queue: asyncio.Queue | None = None) -> str:
     """Deploy parallel Serper web searches via Lava forward proxy (per D-12).
 
     Searches for: news coverage, geographic impact, employment data, food bank demand.
     Returns concatenated text snippets for the reasoning model to analyze.
     """
+    # Forward proxy requires the admin API token, not the spend key
+    # (spend keys can't be used on /v1/forward — Lava returns 401)
     lava_token = os.environ.get("LAVA_API_TOKEN", "")
     if not lava_token:
         logger.warning("LAVA_API_TOKEN not set, returning minimal context")
@@ -60,6 +64,7 @@ async def _research_crisis(post_content: str) -> str:
 
     snippets = [f"Triggering post: {post_content}"]
 
+    start_all = time.time()
     async with httpx.AsyncClient() as client:
         tasks = []
         for q in queries:
@@ -83,10 +88,26 @@ async def _research_crisis(post_content: str) -> str:
                 continue
             try:
                 data = result.json()
-                for item in data.get("organic", [])[:3]:
+                organic = data.get("organic", [])[:3]
+                for item in organic:
                     title = item.get("title", "")
                     snippet = item.get("snippet", "")
                     snippets.append(f"- {title}: {snippet}")
+
+                # Emit audit event for this query
+                if queue:
+                    await _emit(queue, ApiCallEvent(
+                        agent="researcher",
+                        service="serper",
+                        request_summary=f"Google Search: \"{queries[i]}\"",
+                        response_summary="\n".join(
+                            f"- {item.get('title','')}: {item.get('snippet','')[:120]}"
+                            for item in organic
+                        )[:2000] or "(no results)",
+                        result_count=len(organic),
+                        duration_ms=int((time.time() - start_all) * 1000),
+                        timestamp=time.time(),
+                    ))
             except Exception as e:
                 logger.warning("Serper result %d parse failed: %s", i, e)
 
@@ -113,18 +134,35 @@ WEB RESEARCH CONTEXT:
 {web_context}"""
 
 
-async def _analyze_crisis(post_content: str, web_context: str) -> str:
+async def _analyze_crisis(post_content: str, web_context: str, queue: asyncio.Queue | None = None) -> str:
     """Analyze crisis using reasoning model (gemini-2.5-pro via Lava, tagged agent:researcher).
 
     Per D-10: Uses a different model than the classifier to showcase multi-model routing.
     """
+    from agents.gateway import MODEL_MAP
     llm = get_llm("researcher", temperature=0.2)
+    sys_content = ANALYSIS_PROMPT.format(web_context=web_context)
+    human_content = f"Analyze this crisis trigger: {post_content}"
     messages = [
-        SystemMessage(content=ANALYSIS_PROMPT.format(web_context=web_context)),
-        HumanMessage(content=f"Analyze this crisis trigger: {post_content}"),
+        SystemMessage(content=sys_content),
+        HumanMessage(content=human_content),
     ]
+    start = time.time()
     response = await llm.ainvoke(messages)
-    return response.content if isinstance(response.content, str) else str(response.content)
+    duration_ms = int((time.time() - start) * 1000)
+    content = response.content if isinstance(response.content, str) else str(response.content)
+
+    if queue:
+        await _emit(queue, LlmCallEvent(
+            agent="researcher",
+            model=MODEL_MAP.get("researcher", "gemini-2.5-pro"),
+            prompt_text=f"[System] {sys_content[:800]}\n[Human] {human_content}"[:2000],
+            response_text=content[:5000],
+            duration_ms=duration_ms,
+            timestamp=time.time(),
+        ))
+
+    return content
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +207,7 @@ CRISIS ANALYSIS:
 {analysis}"""
 
 
-async def _assemble_profile(analysis: str) -> dict:
+async def _assemble_profile(analysis: str, queue: asyncio.Queue | None = None) -> dict:
     """Assemble CrisisProfile using fast model from different provider (gpt-4.1-mini via Lava).
 
     Per D-10: Uses OpenAI model (different provider from Google) to showcase
@@ -177,19 +215,25 @@ async def _assemble_profile(analysis: str) -> dict:
 
     Returns dict matching CrisisProfile schema.
     """
+    from agents.gateway import MODEL_MAP
     llm = get_llm("profiler", temperature=0.1)
     llm_with_tools = llm.bind_tools([assemble_crisis_profile], tool_choice="any")
 
+    sys_content = PROFILE_PROMPT.format(analysis=analysis)
     messages = [
-        SystemMessage(content=PROFILE_PROMPT.format(analysis=analysis)),
+        SystemMessage(content=sys_content),
         HumanMessage(content="Assemble the crisis profile now."),
     ]
 
+    start = time.time()
     response = await llm_with_tools.ainvoke(messages)
+    duration_ms = int((time.time() - start) * 1000)
 
+    tool_args = None
     if response.tool_calls:
         args = response.tool_calls[0]["args"]
-        return {
+        tool_args = args
+        result = {
             "crisis_type": str(args.get("crisis_type", "layoffs")),
             "geography": str(args.get("geography", "Greater Philadelphia")),
             "severity": int(args.get("severity", 4)),
@@ -199,19 +243,32 @@ async def _assemble_profile(analysis: str) -> dict:
             "notes": str(args.get("notes", "")),
             "description": f"Auto-detected crisis: {str(args.get('notes', ''))}",
         }
+    else:
+        logger.warning("Profile assembly tool calling failed, using defaults")
+        result = {
+            "crisis_type": "layoffs",
+            "geography": "Greater Philadelphia",
+            "severity": 4,
+            "timeline_days": 21,
+            "demand_delta_pct": 25,
+            "affected_population": 5000,
+            "notes": "Fallback profile - tool calling failed",
+            "description": "Auto-detected manufacturing crisis in North Philadelphia",
+        }
 
-    # Fallback: use demo-calibrated defaults if tool calling fails
-    logger.warning("Profile assembly tool calling failed, using defaults")
-    return {
-        "crisis_type": "layoffs",
-        "geography": "Greater Philadelphia",
-        "severity": 4,
-        "timeline_days": 21,
-        "demand_delta_pct": 25,
-        "affected_population": 5000,
-        "notes": "Fallback profile - tool calling failed",
-        "description": "Auto-detected manufacturing crisis in North Philadelphia",
-    }
+    if queue:
+        response_text = response.content if isinstance(response.content, str) else str(response.content)
+        await _emit(queue, LlmCallEvent(
+            agent="profiler",
+            model=MODEL_MAP.get("profiler", "gpt-4.1-mini"),
+            prompt_text=f"[System] {sys_content[:800]}\n[Human] Assemble the crisis profile now."[:2000],
+            response_text=(response_text or str(tool_args))[:5000],
+            tool_args=tool_args,
+            duration_ms=duration_ms,
+            timestamp=time.time(),
+        ))
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +305,7 @@ async def orchestrate_crisis_profile(queue: asyncio.Queue, triggering_post) -> d
         message="Deploying web crawlers to gather crisis context...",
         timestamp=time.time(),
     ))
-    web_context = await _research_crisis(triggering_post.content)
+    web_context = await _research_crisis(triggering_post.content, queue=queue)
 
     # Step 2: Crisis analysis with reasoning model (Google Gemini via Lava)
     await _emit(queue, OrchestratorStepEvent(
@@ -257,7 +314,7 @@ async def orchestrate_crisis_profile(queue: asyncio.Queue, triggering_post) -> d
         message="Analyzing crisis severity and geographic impact...",
         timestamp=time.time(),
     ))
-    analysis = await _analyze_crisis(triggering_post.content, web_context)
+    analysis = await _analyze_crisis(triggering_post.content, web_context, queue=queue)
 
     # Step 3: Profile assembly with fast model (OpenAI via Lava -- different provider!)
     await _emit(queue, OrchestratorStepEvent(
@@ -266,7 +323,7 @@ async def orchestrate_crisis_profile(queue: asyncio.Queue, triggering_post) -> d
         message="Assembling structured crisis profile...",
         timestamp=time.time(),
     ))
-    profile = await _assemble_profile(analysis)
+    profile = await _assemble_profile(analysis, queue=queue)
 
     await _emit(queue, CrisisProfileReadyEvent(
         crisis_profile=profile,
