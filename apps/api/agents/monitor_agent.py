@@ -12,6 +12,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 
 from agents.gateway import get_llm
+from agents.orchestrator import orchestrate_crisis_profile
 from agents.pipeline import get_event_queue, _emit, run_pipeline
 from models.monitor import SIMULATED_POSTS, MonitorPost
 from models.events import (
@@ -109,19 +110,10 @@ async def run_monitor(session_id: str):
                     timestamp=time.time(),
                 ))
 
-                # Placeholder crisis profile (Plan 02 will replace with orchestrator)
-                crisis_profile = {
-                    "crisis_type": "layoffs",
-                    "geography": "Greater Philadelphia",
-                    "severity": 4,
-                    "timeline_days": 14,
-                    "demand_delta_pct": 35,
-                    "affected_population": 15000,
-                    "notes": f"Auto-detected from monitor: {post.content}",
-                    "description": post.content,
-                }
+                # Phase 2: Multi-model orchestration via Lava (per D-09, D-10)
+                crisis_profile = await orchestrate_crisis_profile(queue, post)
 
-                # Hand off to existing pipeline (same session, same queue)
+                # Phase 3: Hand off to existing pipeline (per D-08: same session, same queue)
                 await run_pipeline(session_id, crisis_profile)
                 return
 
