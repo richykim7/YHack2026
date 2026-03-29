@@ -67,22 +67,55 @@ def generate_plans(
             ]
         ]
 
-    # Define 3 strategies
+    # Build per-category index for strategy filtering
+    by_cat: dict[str, list[SourceOption]] = defaultdict(list)
+    for s in sources:
+        if s.food_category in deficits:
+            by_cat[s.food_category].append(s)
+
+    # Strategy 1: FASTEST -- top 2 sources per deficit category
+    # (sorted by lead_time_days, then unit_cost as tiebreaker)
+    # This produces ~12 line items with minimal lead time
+    fast_pool: list[SourceOption] = []
+    for cat in sorted(by_cat.keys()):
+        sorted_cat = sorted(
+            by_cat[cat],
+            key=lambda s: (s.lead_time_days, s.unit_cost_per_lb),
+        )
+        fast_pool.extend(sorted_cat[:2])
+
+    # Strategy 2: CHEAPEST -- only donated ($0) and low-cost (<= $0.50/lb)
+    # sources, sorted by unit cost ascending
+    cheap_pool = sorted(
+        [s for s in sources if s.unit_cost_per_lb <= 0.50],
+        key=lambda s: s.unit_cost_per_lb,
+    )
+    # Fallback: if too few cheap sources, include up to $1.00/lb
+    if len(cheap_pool) < 5:
+        cheap_pool = sorted(
+            [s for s in sources if s.unit_cost_per_lb <= 1.00],
+            key=lambda s: s.unit_cost_per_lb,
+        )
+
+    # Strategy 3: BEST NUTRITION -- round-robin for maximum category diversity
+    # (existing behavior, uses ALL sources)
+    nutrition_pool = _round_robin_sort(sources, set(deficits.keys()))
+
     strategies = [
         (
             "fastest",
-            "Minimize delivery time",
-            sorted(sources, key=lambda s: s.lead_time_days),
+            "Minimize delivery time (top 2 sources per category)",
+            fast_pool,
         ),
         (
             "cheapest",
-            "Minimize total cost",
-            sorted(sources, key=lambda s: s.unit_cost_per_lb),
+            "Minimize total cost (donated and low-cost sources only)",
+            cheap_pool,
         ),
         (
             "best_nutrition",
-            "Maximize nutritional coverage across categories",
-            _round_robin_sort(sources, set(deficits.keys())),
+            "Maximize nutritional coverage across all categories",
+            nutrition_pool,
         ),
     ]
 
