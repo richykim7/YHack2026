@@ -8,6 +8,37 @@ import { getSupplierCoord } from '@/lib/supplierCoords';
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN!;
 
+interface TransferItem {
+  from_site_id: string;
+  from_site_name: string;
+  to_site_id: string;
+  to_site_name: string;
+  food_category: string;
+  quantity_lbs: number;
+  delivery_cost: number;
+  distance_miles: number;
+}
+
+function bezierArc(
+  start: [number, number],  // [lng, lat]
+  end: [number, number],
+  curvature = 0.25,
+  segments = 40
+): [number, number][] {
+  const dx = end[0] - start[0];
+  const dy = end[1] - start[1];
+  const cx = (start[0] + end[0]) / 2 - dy * curvature;
+  const cy = (start[1] + end[1]) / 2 + dx * curvature;
+  return Array.from({ length: segments + 1 }, (_, i) => {
+    const t = i / segments;
+    const mt = 1 - t;
+    return [
+      mt * mt * start[0] + 2 * mt * t * cx + t * t * end[0],
+      mt * mt * start[1] + 2 * mt * t * cy + t * t * end[1],
+    ] as [number, number];
+  });
+}
+
 interface MapViewProps {
   sites: Site[];
   selectedSiteId: string | null;
@@ -313,7 +344,8 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
       if (m.getLayer('supplier-labels')) m.removeLayer('supplier-labels');
       if (m.getLayer('supplier-markers')) m.removeLayer('supplier-markers');
       if (m.getLayer('route-arrows')) m.removeLayer('route-arrows');
-      if (m.getLayer('route-lines')) m.removeLayer('route-lines');
+      if (m.getLayer('route-lines-delivery')) m.removeLayer('route-lines-delivery');
+      if (m.getLayer('route-lines-transfer')) m.removeLayer('route-lines-transfer');
       if (m.getSource('suppliers')) m.removeSource('suppliers');
       if (m.getSource('routes')) m.removeSource('routes');
 
@@ -371,18 +403,34 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
         features: supplierFeatures,
       };
 
-      // Build route lines from each supplier to nearest site
+      // Build route lines from each supplier to nearest site (bezier arcs)
       const routeFeatures: GeoJSON.Feature<GeoJSON.LineString>[] = [];
-      for (const [name, { coord }] of Object.entries(supplierAgg)) {
+      for (const [name, { coord, totalQty }] of Object.entries(supplierAgg)) {
         const target = findNearestSite(coord.lat, coord.lng, sitesRef.current);
         if (!target) continue;
         routeFeatures.push({
           type: 'Feature' as const,
           geometry: {
             type: 'LineString' as const,
-            coordinates: [[coord.lng, coord.lat], [target.lng, target.lat]],
+            coordinates: bezierArc([coord.lng, coord.lat], [target.lng, target.lat], 0.25, 40),
           },
-          properties: { supplier: name, site: target.name },
+          properties: { supplier: name, site: target.name, quantity_lbs: totalQty, route_type: 'delivery' },
+        });
+      }
+
+      // Add transfer route features (site-to-site)
+      const transfers: TransferItem[] = ((selectedPlan as unknown as Record<string, unknown>).transfers as TransferItem[]) ?? [];
+      for (const transfer of transfers) {
+        const fromSite = sitesRef.current.find(s => s.id === transfer.from_site_id);
+        const toSite = sitesRef.current.find(s => s.id === transfer.to_site_id);
+        if (!fromSite || !toSite) continue;
+        routeFeatures.push({
+          type: 'Feature' as const,
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: bezierArc([fromSite.lng, fromSite.lat], [toSite.lng, toSite.lat], 0.2, 40),
+          },
+          properties: { supplier: transfer.from_site_name, site: transfer.to_site_name, quantity_lbs: transfer.quantity_lbs, route_type: 'transfer' },
         });
       }
 
@@ -391,25 +439,71 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
         features: routeFeatures,
       };
 
-      // Add route lines (behind supplier markers) — static dashed lines
+      // Add route lines (behind supplier markers) — bezier arcs with width encoding
       m.addSource('routes', { type: 'geojson', data: routeGeoJSON });
+
+      // Delivery routes (teal)
       m.addLayer({
-        id: 'route-lines',
+        id: 'route-lines-delivery',
         type: 'line',
         source: 'routes',
+        filter: ['==', ['get', 'route_type'], 'delivery'],
         paint: {
-          'line-color': '#60a5fa',
-          'line-width': 1.5,
+          'line-color': '#2dd4bf',
+          'line-width': ['interpolate', ['linear'], ['get', 'quantity_lbs'], 500, 2, 5000, 4, 10000, 7],
           'line-dasharray': [4, 3],
-          'line-opacity': 0.5,
+          'line-opacity': 0.7,
         },
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
       }, 'site-pulse');
 
-      // Add chevron arrows along the route lines to show direction of flow
+      // Transfer routes (amber)
+      m.addLayer({
+        id: 'route-lines-transfer',
+        type: 'line',
+        source: 'routes',
+        filter: ['==', ['get', 'route_type'], 'transfer'],
+        paint: {
+          'line-color': '#fbbf24',
+          'line-width': ['interpolate', ['linear'], ['get', 'quantity_lbs'], 500, 2, 5000, 4, 10000, 7],
+          'line-dasharray': [6, 4],
+          'line-opacity': 0.7,
+        },
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+      }, 'site-pulse');
+
+      // Animated dash flow
+      let animFrameId = 0;
+      let dashStep = 0;
+      function animateDash() {
+        dashStep++;
+        if (!m || dashStep % 3 !== 0) {
+          animFrameId = requestAnimationFrame(animateDash);
+          return;
+        }
+        const phase = (dashStep / 3) % 20;
+        try {
+          if (m.getLayer('route-lines-delivery')) {
+            m.setPaintProperty('route-lines-delivery', 'line-dasharray', [
+              4, Math.max(1, 3 + Math.sin(phase * 0.3) * 1.5)
+            ]);
+          }
+          if (m.getLayer('route-lines-transfer')) {
+            m.setPaintProperty('route-lines-transfer', 'line-dasharray', [
+              6, Math.max(1, 4 + Math.sin(phase * 0.3) * 2)
+            ]);
+          }
+        } catch { /* layer may not exist */ }
+        animFrameId = requestAnimationFrame(animateDash);
+      }
+      animateDash();
+
+      // Add chevron arrows along delivery route lines to show direction of flow
       m.addLayer({
         id: 'route-arrows',
         type: 'symbol',
         source: 'routes',
+        filter: ['==', ['get', 'route_type'], 'delivery'],
         layout: {
           'symbol-placement': 'line',
           'symbol-spacing': 80,
@@ -421,7 +515,7 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
           'text-ignore-placement': true,
         },
         paint: {
-          'text-color': '#60a5fa',
+          'text-color': '#2dd4bf',
           'text-opacity': 0.7,
         },
       });
@@ -493,6 +587,7 @@ export function MapView({ sites, selectedSiteId, onSiteClick, onBackgroundClick,
       m.on('mouseleave', 'supplier-markers', onSupplierLeave);
 
       cleanupHandlers = () => {
+        cancelAnimationFrame(animFrameId);
         try {
           m.off('mouseenter', 'supplier-markers', onSupplierEnter);
           m.off('mouseleave', 'supplier-markers', onSupplierLeave);
