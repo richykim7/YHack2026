@@ -87,6 +87,7 @@ export function useCrisisStream() {
   const [sources, setSources] = useState<SourceOption[]>([]);
   const [plans, setPlans] = useState<ResponsePlan[]>([]);
   const [hexPlansUrl, setHexPlansUrl] = useState<string | null>(null);
+  const [hexAssessUrl, setHexAssessUrl] = useState<string | null>(null);
   const [lavaCosts, setLavaCosts] = useState<LavaCostBreakdown | null>(null);
 
   const launchAndStream = useCallback(
@@ -104,6 +105,7 @@ export function useCrisisStream() {
       setSources([]);
       setPlans([]);
       setHexPlansUrl(null);
+      setHexAssessUrl(null);
       setLavaCosts(null);
 
       abortRef.current = new AbortController();
@@ -141,6 +143,9 @@ export function useCrisisStream() {
               }
               if (event.type === 'plans_ready' && event.plans) {
                 setPlans(event.plans);
+              }
+              if (event.type === 'hex_assess_ready' && event.run_url) {
+                setHexAssessUrl(event.run_url);
               }
               if (event.type === 'hex_plans_ready' && event.run_url) {
                 setHexPlansUrl(event.run_url);
@@ -183,5 +188,5 @@ export function useCrisisStream() {
     setIsStreaming(false);
   }, []);
 
-  return { events, isStreaming, isComplete, launchAndStream, stopStream, sources, plans, hexPlansUrl, lavaCosts };
+  return { events, isStreaming, isComplete, launchAndStream, stopStream, sources, plans, hexPlansUrl, hexAssessUrl, lavaCosts };
 }
