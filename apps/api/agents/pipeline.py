@@ -176,6 +176,18 @@ async def run_pipeline(session_id: str, crisis_profile: dict):
         # Stage 4: OPTIMIZE (generate response plans)
         plans = await _run_optimize_stage(queue, gap, sources, profile)
 
+        # Emit Lava usage costs (non-blocking, best-effort)
+        try:
+            from routers.lava import fetch_lava_costs_data
+            costs_data = await fetch_lava_costs_data(limit=50)
+            if costs_data.get("costs"):
+                await _emit(queue, LavaUsageEvent(
+                    costs=costs_data,
+                    timestamp=time.time(),
+                ))
+        except Exception as e:
+            logger.warning("Lava costs fetch failed: %s", e)
+
         # Pipeline complete
         await _emit(queue, PipelineCompleteEvent(timestamp=time.time()))
 
