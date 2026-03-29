@@ -11,6 +11,39 @@ interface MonitorFeedProps {
   orchestratorSteps?: { step: string; model: string; message: string }[];
 }
 
+// Synthetic engagement + display data keyed by post source
+const SYNTHETIC_PROFILES: Record<string, { handle: string; avatar: string; engagement: { likes: number; retweets: number; replies: number } }[]> = {
+  twitter: [
+    { handle: '@PhillyWeather', avatar: '\u{1F324}', engagement: { likes: 234, retweets: 12, replies: 8 } },
+    { handle: '@SportsPhilly', avatar: '\u{1F3C8}', engagement: { likes: 1823, retweets: 342, replies: 156 } },
+    { handle: '@PHL_Traffic', avatar: '\u{1F697}', engagement: { likes: 45, retweets: 23, replies: 5 } },
+    { handle: '@PhillyInquirer', avatar: '\u{1F4F0}', engagement: { likes: 892, retweets: 267, replies: 89 } },
+    { handle: '@CBSPhilly', avatar: '\u{1F4FA}', engagement: { likes: 3421, retweets: 1204, replies: 567 } },
+    { handle: '@PhillyFoodBank', avatar: '\u{1F34E}', engagement: { likes: 156, retweets: 89, replies: 34 } },
+  ],
+  news: [
+    { handle: '@PhillyInquirer', avatar: '\u{1F4F0}', engagement: { likes: 567, retweets: 234, replies: 45 } },
+    { handle: '@6abc', avatar: '\u{1F4FA}', engagement: { likes: 1234, retweets: 456, replies: 123 } },
+    { handle: '@WHYYNews', avatar: '\u{1F4FB}', engagement: { likes: 345, retweets: 89, replies: 23 } },
+  ],
+  community_alert: [
+    { handle: '@PhillyOEM', avatar: '\u{1F6A8}', engagement: { likes: 2345, retweets: 1567, replies: 432 } },
+    { handle: '@ReadyPhilly', avatar: '\u{26A0}\u{FE0F}', engagement: { likes: 876, retweets: 543, replies: 210 } },
+  ],
+};
+
+function getSyntheticProfile(postIndex: number, source: string) {
+  const profiles = SYNTHETIC_PROFILES[source] || SYNTHETIC_PROFILES.twitter;
+  return profiles[postIndex % profiles.length];
+}
+
+function formatTimeAgo(ts: number): string {
+  const seconds = Math.floor((Date.now() / 1000) - ts);
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  return `${Math.floor(seconds / 3600)}h ago`;
+}
+
 function sourceIcon(source: string) {
   switch (source) {
     case 'twitter': return <Bird size={12} className="text-sky-400" />;
@@ -98,9 +131,10 @@ export function MonitorFeed({ posts, classifications, crisisDetected, monitorMod
         )}
 
         {/* Post cards */}
-        {posts.map(post => {
+        {posts.map((post, index) => {
           const cls = classifications.get(post.id);
           const isIrrelevant = cls && !cls.relevant;
+          const profile = getSyntheticProfile(index, post.source);
           return (
             <div
               key={post.id}
@@ -112,14 +146,28 @@ export function MonitorFeed({ posts, classifications, crisisDetected, monitorMod
             >
               {/* Post header */}
               <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center">
-                  {sourceIcon(post.source)}
+                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-base shrink-0">
+                  {profile.avatar}
                 </div>
-                <span className="text-xs font-bold text-slate-300 truncate">{post.author}</span>
-                <span className="text-[10px] text-slate-600 uppercase">{post.source.replace('_', ' ')}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-200 truncate">{post.author}</span>
+                    <span className="text-[10px] text-slate-500">{profile.handle}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {sourceIcon(post.source)}
+                    <span className="text-[10px] text-slate-600">{formatTimeAgo(post.timestamp)}</span>
+                  </div>
+                </div>
               </div>
               {/* Post content */}
               <p className="text-sm text-slate-300 leading-relaxed line-clamp-3">{post.content}</p>
+              {/* Engagement metrics */}
+              <div className="flex items-center gap-4 mt-2 text-[10px] text-slate-600">
+                <span>{'\u{1F4AC}'} {profile.engagement.replies}</span>
+                <span>{'\u{1F504}'} {profile.engagement.retweets}</span>
+                <span>{'\u{2764}\u{FE0F}'} {profile.engagement.likes.toLocaleString()}</span>
+              </div>
               {/* Classification badge (appears after classification event) */}
               {cls && <ClassificationBadge classification={cls} />}
             </div>
