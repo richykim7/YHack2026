@@ -7,12 +7,22 @@ Pure Python, no LLM dependency. Generates three plans:
 """
 
 import logging
+import math
 from collections import defaultdict
 
 from models.assess import GapAnalysis
 from models.crisis import CrisisProfile, PlanLineItem, ResponsePlan, SourceOption
 
 logger = logging.getLogger(__name__)
+
+
+def haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in miles between two lat/lon points."""
+    R = 3959  # Earth radius in miles
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return R * 2 * math.asin(math.sqrt(a))
 
 
 def generate_plans(
@@ -42,6 +52,11 @@ def generate_plans(
         if g.gap_lbs < 0
     }
     total_deficit = sum(deficits.values())
+
+    # Use central Philadelphia as default target for delivery cost calculations
+    # In a full system, this would come from the crisis-affected site
+    target_lat = 39.95
+    target_lng = -75.17
 
     # Guard: no deficit or no sources -> return 3 empty plans
     if total_deficit <= 0 or not sources:
@@ -123,7 +138,7 @@ def generate_plans(
 
     for name, strategy, sorted_sources in strategies:
         line_items, remaining = _greedy_fill(
-            sorted_sources, dict(deficits)
+            sorted_sources, dict(deficits), target_lat, target_lng
         )
 
         total_sourced = total_deficit - sum(remaining.values())
@@ -131,7 +146,7 @@ def generate_plans(
         max_lead = max(
             (li.lead_time_days for li in line_items), default=0
         )
-        total_cost = sum(li.cost for li in line_items)
+        total_cost = sum(li.cost + li.delivery_cost for li in line_items)
         estimated_served = int(
             profile.affected_population * coverage_pct / 100
         )
@@ -159,16 +174,20 @@ def generate_plans(
 def _greedy_fill(
     sorted_sources: list[SourceOption],
     remaining_gaps: dict[str, float],
+    target_lat: float = 39.95,
+    target_lng: float = -75.17,
 ) -> tuple[list[PlanLineItem], dict[str, float]]:
     """Greedily fill category gaps using sources in the given order.
 
     Each source contributes up to its available quantity toward its
     food_category deficit. Sources for categories without a deficit
-    are skipped.
+    are skipped. Delivery cost is computed via haversine distance.
 
     Args:
         sorted_sources: Sources in strategy-specific order.
         remaining_gaps: Mutable dict of {category: deficit_lbs}.
+        target_lat: Latitude of delivery target site.
+        target_lng: Longitude of delivery target site.
 
     Returns:
         Tuple of (line_items created, remaining unfilled gaps).
@@ -183,6 +202,13 @@ def _greedy_fill(
         qty = min(src.quantity_available_lbs, remaining_gaps[cat])
         remaining_gaps[cat] -= qty
 
+        # Compute delivery cost based on haversine distance
+        delivery_cost = 0.0
+        distance_miles = 0.0
+        if src.latitude and src.longitude:
+            distance_miles = round(haversine_miles(src.latitude, src.longitude, target_lat, target_lng), 1)
+            delivery_cost = round(75.0 + 3.50 * distance_miles + 0.02 * qty, 2)
+
         line_items.append(
             PlanLineItem(
                 source_id=src.id,
@@ -192,6 +218,8 @@ def _greedy_fill(
                 quantity_lbs=qty,
                 cost=round(qty * src.unit_cost_per_lb, 2),
                 lead_time_days=src.lead_time_days,
+                delivery_cost=delivery_cost,
+                distance_miles=distance_miles,
             )
         )
 
