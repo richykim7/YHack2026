@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -16,9 +16,16 @@ class LaunchRequest(BaseModel):
 
 
 @router.post("/launch")
-async def launch_pipeline(request: LaunchRequest, background_tasks: BackgroundTasks):
-    """Start the pipeline for a session. Returns immediately."""
-    background_tasks.add_task(run_pipeline, request.session_id, request.crisis_profile)
+async def launch_pipeline(request: LaunchRequest):
+    """Start the pipeline for a session. Returns immediately.
+
+    Uses asyncio.create_task (not BackgroundTasks) so the pipeline starts
+    on the event loop immediately — no race condition with the SSE stream.
+    """
+    # Pre-create the queue so the stream endpoint can connect to it
+    get_event_queue(request.session_id)
+    # Fire-and-forget on the event loop
+    asyncio.create_task(run_pipeline(request.session_id, request.crisis_profile))
     return {"status": "started", "session_id": request.session_id}
 
 
@@ -39,7 +46,6 @@ async def stream_events(session_id: str):
                     if event["type"] in ("complete", "pipeline_complete", "error"):
                         break
                 except asyncio.TimeoutError:
-                    # Send keepalive comment
                     yield {"comment": "keepalive"}
         finally:
             cleanup_queue(session_id)
