@@ -6,6 +6,9 @@ from langchain_openai import ChatOpenAI
 MODEL_MAP = {
     "scope": "gemini-2.5-flash",
     "assess": "gemini-2.5-pro",
+    "monitor": "gemini-2.5-flash",       # Fast classifier for post scanning
+    "researcher": "gemini-2.5-pro",       # Reasoning model for crisis analysis
+    "profiler": "gpt-4.1-mini",           # OpenAI model -- different provider for Lava showcase
 }
 DEFAULT_MODEL = "gemini-2.5-flash"
 

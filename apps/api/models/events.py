@@ -127,6 +127,48 @@ class LavaUsageEvent(BaseModel):
     timestamp: float
 
 
+# === Monitor agent events (Phase 9) ===
+
+class MonitorPostEvent(BaseModel):
+    type: Literal["monitor_post"] = "monitor_post"
+    post: dict  # MonitorPost serialized
+    timestamp: float
+
+
+class MonitorClassificationEvent(BaseModel):
+    type: Literal["monitor_classification"] = "monitor_classification"
+    post_id: str
+    classification: dict  # {relevant: bool, confidence: float, reason: str}
+    timestamp: float
+
+
+class CrisisDetectedEvent(BaseModel):
+    type: Literal["crisis_detected"] = "crisis_detected"
+    post: dict  # The triggering post
+    classification: dict  # Classification that triggered
+    timestamp: float
+
+
+class OrchestratorStartEvent(BaseModel):
+    type: Literal["orchestrator_start"] = "orchestrator_start"
+    message: str
+    timestamp: float
+
+
+class OrchestratorStepEvent(BaseModel):
+    type: Literal["orchestrator_step"] = "orchestrator_step"
+    step: str  # "web_research", "crisis_analysis", "profile_assembly"
+    model: str  # Model name used
+    message: str
+    timestamp: float
+
+
+class CrisisProfileReadyEvent(BaseModel):
+    type: Literal["crisis_profile_ready"] = "crisis_profile_ready"
+    crisis_profile: dict  # CrisisProfile serialized
+    timestamp: float
+
+
 # === Union of ALL event types ===
 
 SSEEvent = Union[
@@ -149,6 +191,12 @@ SSEEvent = Union[
     HexPlansReadyEvent,
     PipelineCompleteEvent,
     LavaUsageEvent,
+    MonitorPostEvent,
+    MonitorClassificationEvent,
+    CrisisDetectedEvent,
+    OrchestratorStartEvent,
+    OrchestratorStepEvent,
+    CrisisProfileReadyEvent,
 ]
 
 # All valid event type strings (for reference)
@@ -160,6 +208,8 @@ ALL_EVENT_TYPES = [
     "discover_start", "source_found", "discover_complete",
     "optimize_start", "plans_ready", "hex_plans_ready",
     "pipeline_complete", "lava_usage",
+    "monitor_post", "monitor_classification", "crisis_detected",
+    "orchestrator_start", "orchestrator_step", "crisis_profile_ready",
 ]
 
 
