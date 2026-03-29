@@ -1,8 +1,11 @@
 'use client';
 
-import type { ResponsePlan } from '@/lib/types';
+import { useState } from 'react';
+import type { ResponsePlan, GeneratedDocument } from '@/lib/types';
+import { API_BASE } from '@/lib/api';
 import { PlanCard } from '@/components/plans/PlanCard';
 import { HexDashboard } from '@/components/hex/HexDashboard';
+import { DocumentDrawer } from '@/components/plans/DocumentDrawer';
 import { MOCK_PLANS } from '@/lib/mockData';
 
 interface PlansTabProps {
@@ -12,6 +15,9 @@ interface PlansTabProps {
   isComplete: boolean;
   selectedPlanName: string | null;
   onSelectPlan: (plan: ResponsePlan) => void;
+  acceptedPlanName?: string | null;
+  onAcceptPlan?: (plan: ResponsePlan) => void;
+  sessionId?: string | null;
 }
 
 export function PlansTab({
@@ -21,7 +27,13 @@ export function PlansTab({
   isComplete,
   selectedPlanName,
   onSelectPlan,
+  acceptedPlanName,
+  onAcceptPlan,
+  sessionId,
 }: PlansTabProps) {
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
 
   // TODO: Remove mock fallback when backend is ready
   const displayPlans = plans.length > 0 ? plans : MOCK_PLANS;
@@ -34,11 +46,32 @@ export function PlansTab({
         <h2 className="text-sm font-display font-bold text-slate-300 uppercase tracking-widest">
           Response Plans
         </h2>
-        {isMockData && (
-          <span className="text-[10px] text-amber-500/50 font-mono">
-            MOCK DATA
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {acceptedPlanName && (
+            <button
+              onClick={async () => {
+                if (sessionId) {
+                  try {
+                    const res = await fetch(`${API_BASE}/api/plans/${sessionId}/documents`);
+                    if (res.ok) {
+                      const data = await res.json();
+                      setDocuments(data.documents || []);
+                    }
+                  } catch { /* graceful failure */ }
+                }
+                setDrawerOpen(true);
+              }}
+              className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm font-display font-bold text-slate-200 uppercase tracking-widest transition-colors"
+            >
+              View Documents
+            </button>
+          )}
+          {isMockData && (
+            <span className="text-[10px] text-amber-500/50 font-mono">
+              MOCK DATA
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Empty state */}
@@ -66,7 +99,10 @@ export function PlansTab({
               key={plan.name}
               plan={plan}
               isSelected={selectedPlanName === plan.name}
+              isAccepted={acceptedPlanName === plan.name}
+              isAnyAccepted={!!acceptedPlanName}
               onSelect={onSelectPlan}
+              onAccept={onAcceptPlan ?? onSelectPlan}
             />
           ))}
         </div>
@@ -85,6 +121,9 @@ export function PlansTab({
         }
         height={500}
       />
+
+      {/* Document drawer */}
+      <DocumentDrawer documents={documents} open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>
   );
 }

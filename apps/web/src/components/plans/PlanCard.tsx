@@ -2,12 +2,15 @@
 
 import type { ResponsePlan } from '@/lib/types';
 import { cn } from '@/components/ui/cn';
-import { Clock, DollarSign, Users, ShieldCheck } from 'lucide-react';
+import { Clock, DollarSign, Users, ShieldCheck, Check } from 'lucide-react';
 
 interface PlanCardProps {
   plan: ResponsePlan;
   isSelected: boolean;
+  isAccepted: boolean;
+  isAnyAccepted: boolean;
   onSelect: (plan: ResponsePlan) => void;
+  onAccept: (plan: ResponsePlan) => void;
 }
 
 const PLAN_DISPLAY: Record<
@@ -19,17 +22,26 @@ const PLAN_DISPLAY: Record<
   best_nutrition: { label: 'Best Nutrition', accent: 'border-l-blue-400' },
 };
 
-export function PlanCard({ plan, isSelected, onSelect }: PlanCardProps) {
+export function PlanCard({ plan, isSelected, isAccepted, isAnyAccepted, onSelect, onAccept }: PlanCardProps) {
   const display = PLAN_DISPLAY[plan.name];
 
   return (
     <div
       className={cn(
-        'bg-slate-800 rounded-lg border border-slate-700 p-5 border-l-[3px] transition-all duration-200',
+        'relative bg-slate-800 rounded-lg border border-slate-700 p-5 border-l-[3px] transition-all duration-200',
         display.accent,
         isSelected && 'ring-2 ring-blue-500 border-blue-500',
+        isAnyAccepted && !isAccepted && 'opacity-50 pointer-events-none',
       )}
     >
+      {/* Accepted badge */}
+      {isAccepted && (
+        <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40">
+          <Check size={12} className="text-emerald-400" />
+          <span className="text-xs font-bold text-emerald-300 uppercase tracking-wide">Accepted</span>
+        </div>
+      )}
+
       {/* Plan name */}
       <h3 className="font-display font-bold text-slate-100 uppercase tracking-widest text-sm">
         {display.label}
@@ -96,19 +108,28 @@ export function PlanCard({ plan, isSelected, onSelect }: PlanCardProps) {
         {plan.line_items.length} line items
       </p>
 
-      {/* Select button */}
-      <button
-        type="button"
-        onClick={() => onSelect(plan)}
-        className={cn(
-          'w-full rounded-lg py-2 font-display font-bold uppercase tracking-widest text-sm transition-colors',
-          isSelected
-            ? 'bg-blue-500 text-white'
-            : 'bg-blue-600 hover:bg-blue-500 text-white',
-        )}
-      >
-        {isSelected ? 'Selected' : 'Select Plan'}
-      </button>
+      {/* Action buttons */}
+      {!isAccepted && !isAnyAccepted && (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => onSelect(plan)}
+            className={cn(
+              'flex-1 rounded-lg py-2 font-display font-bold uppercase tracking-widest text-xs transition-colors',
+              isSelected ? 'bg-blue-500 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300',
+            )}
+          >
+            {isSelected ? 'Viewing' : 'Preview'}
+          </button>
+          <button
+            type="button"
+            onClick={() => onAccept(plan)}
+            className="flex-1 rounded-lg py-2 font-display font-bold uppercase tracking-widest text-xs bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+          >
+            Accept Plan
+          </button>
+        </div>
+      )}
     </div>
   );
 }
