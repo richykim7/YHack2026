@@ -1,6 +1,7 @@
 'use client';
 import { NETWORK_NAME } from '@/lib/constants';
 import { HealthGauge } from '@/components/dashboard/HealthGauge';
+import { FoodChainLogo } from '@/components/ui/FoodChainLogo';
 import { useSites } from '@/hooks/useSites';
 import { Activity, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
 import type { ResponsePlan } from '@/lib/types';
@@ -35,11 +36,9 @@ export function DashboardHeader({ selectedPlan }: DashboardHeaderProps) {
   return (
     <header className="flex items-center justify-between px-6 py-3 bg-slate-800 border-b border-slate-700">
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-blue-500 flex items-center justify-center text-white font-display font-bold text-sm tracking-wide">
-          CG
-        </div>
+        <FoodChainLogo size={32} />
         <div>
-          <h1 className="text-lg font-display font-bold text-slate-100 tracking-wide">CrisisGrid</h1>
+          <h1 className="text-lg font-display font-bold text-slate-100 tracking-wide">FoodChain</h1>
           <p className="text-xs text-slate-400">{NETWORK_NAME}</p>
         </div>
       </div>

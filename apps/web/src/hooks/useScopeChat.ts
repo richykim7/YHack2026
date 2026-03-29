@@ -89,7 +89,7 @@ export function useScopeChat() {
       role: 'ai',
       content:
         'Pipeline complete. You can now ask follow-up questions about the data — ' +
-        "I'll route them to Hex Threads for analysis against the CrisisGrid database.",
+        "I'll route them to Hex Threads for analysis against the FoodChain database.",
       timestamp: Date.now(),
     };
     setMessages(prev => [...prev, systemMsg]);

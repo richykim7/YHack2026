@@ -22,7 +22,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'CrisisGrid',
+  title: 'FoodChain',
   description: 'AI-powered crisis response coordination',
 };
 
