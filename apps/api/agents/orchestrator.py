@@ -161,9 +161,9 @@ Based on the analysis below, create a structured crisis profile by calling the a
 Use realistic values based on the analysis. If the analysis mentions specific numbers, use those.
 If not, use reasonable estimates for a manufacturing layoff crisis in a major US city:
 - severity: typically 3-4 for localized economic crises
-- timeline_days: typically 14-30 for layoff impacts
-- demand_delta_pct: typically 25-40% for significant community impact
-- affected_population: based on analysis context
+- timeline_days: typically 21-28 for layoff impacts on food demand
+- demand_delta_pct: typically 20-30% for localized manufacturing crisis
+- affected_population: typically 3000-8000 for a single-corridor manufacturing crisis
 
 CRISIS ANALYSIS:
 {analysis}"""
@@ -193,22 +193,22 @@ async def _assemble_profile(analysis: str) -> dict:
             "crisis_type": str(args.get("crisis_type", "layoffs")),
             "geography": str(args.get("geography", "Greater Philadelphia")),
             "severity": int(args.get("severity", 4)),
-            "timeline_days": int(args.get("timeline_days", 14)),
-            "demand_delta_pct": float(args.get("demand_delta_pct", 35)),
-            "affected_population": int(args.get("affected_population", 15000)),
+            "timeline_days": int(args.get("timeline_days", 21)),
+            "demand_delta_pct": float(args.get("demand_delta_pct", 25)),
+            "affected_population": int(args.get("affected_population", 5000)),
             "notes": str(args.get("notes", "")),
             "description": f"Auto-detected crisis: {str(args.get('notes', ''))}",
         }
 
-    # Fallback: use safe demo defaults if tool calling fails
+    # Fallback: use demo-calibrated defaults if tool calling fails
     logger.warning("Profile assembly tool calling failed, using defaults")
     return {
         "crisis_type": "layoffs",
         "geography": "Greater Philadelphia",
         "severity": 4,
-        "timeline_days": 14,
-        "demand_delta_pct": 35,
-        "affected_population": 15000,
+        "timeline_days": 21,
+        "demand_delta_pct": 25,
+        "affected_population": 5000,
         "notes": "Fallback profile - tool calling failed",
         "description": "Auto-detected manufacturing crisis in North Philadelphia",
     }
