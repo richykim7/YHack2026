@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { AnalysisView } from './AnalysisView';
 import { ActivityFeed } from './ActivityFeed';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, BarChart3 } from 'lucide-react';
 import type { GapAnalysis, AgentActivity } from '@/lib/types';
 
 type SubTab = 'analysis' | 'activity';
@@ -28,6 +28,31 @@ export function AssessmentTab({
   isComplete = false,
 }: AssessmentTabProps) {
   const [subTab, setSubTab] = useState<SubTab>('analysis'); // D-06: Analysis is default
+
+  // Before-pipeline empty state
+  if (!gapAnalysis && !isStreaming && !isComplete) {
+    return (
+      <div className="h-full flex items-center justify-center p-6">
+        <div className="text-center max-w-sm">
+          <BarChart3 className="mx-auto mb-4 text-slate-600" size={48} />
+          <h2 className="text-lg font-semibold text-slate-300 mb-2">No Assessment Data</h2>
+          <p className="text-sm text-slate-500">Run a crisis analysis from the Dashboard tab to see gap analysis results.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Streaming skeleton
+  if (isStreaming && !gapAnalysis) {
+    return (
+      <div className="h-full overflow-y-auto p-6 space-y-4">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-slate-700 rounded w-48" />
+          <div className="h-64 bg-slate-700 rounded" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">

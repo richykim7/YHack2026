@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, type FormEvent } from 'react';
-import { Send } from 'lucide-react';
+import { Send, MessageCircle } from 'lucide-react';
 import { postJSON } from '@/lib/api';
 import type { FollowupResponse } from '@/lib/types';
 import { cn } from '@/components/ui/cn';
@@ -52,9 +52,13 @@ export function FollowUpTab({ isComplete, sessionId }: FollowUpTabProps) {
       {/* Not-ready overlay message */}
       {!isComplete && (
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-slate-500 text-sm">
-            Follow-up available after pipeline completes
-          </p>
+          <div className="text-center max-w-sm">
+            <MessageCircle className="mx-auto mb-4 text-slate-600" size={48} />
+            <h2 className="text-lg font-semibold text-slate-300 mb-2">Follow-Up Questions</h2>
+            <p className="text-sm text-slate-500">
+              Follow-up questions available after pipeline completes. Start a crisis analysis from the Dashboard tab.
+            </p>
+          </div>
         </div>
       )}
 

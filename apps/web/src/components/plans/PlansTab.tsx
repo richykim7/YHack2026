@@ -85,9 +85,12 @@ export function PlansTab({
             ) : isComplete ? (
               <p className="text-sm">No plans generated</p>
             ) : (
-              <p className="text-sm">
-                Plans available after OPTIMIZE pipeline runs
-              </p>
+              <>
+                <p className="text-sm">
+                  Plans available after OPTIMIZE pipeline runs
+                </p>
+                <p className="text-xs text-slate-600 mt-1">Start a crisis analysis from the Dashboard tab.</p>
+              </>
             )}
           </div>
         </div>

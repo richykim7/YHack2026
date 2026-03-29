@@ -40,6 +40,12 @@ export function MapTab({ selectedPlan }: { selectedPlan?: ResponsePlan | null })
         onBackgroundClick={clearSelection}
         selectedPlan={selectedPlan ?? null}
       />
+      {/* Hint banner when no plan selected */}
+      {!selectedPlan && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 px-4 py-2 bg-slate-800/90 rounded-lg border border-slate-700 text-sm text-slate-400 backdrop-blur-sm">
+          Select a response plan to see delivery routes and supplier locations
+        </div>
+      )}
       {/* Vignette edge overlay */}
       <div className="map-vignette" />
       {selectedSite && (

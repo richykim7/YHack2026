@@ -48,6 +48,19 @@ export function UsageTab({ pipelineComplete = false, plans = [], sources = [] }:
     plans.flatMap(p => p.line_items.map(li => li.food_category))
   ).size;
 
+  // Before-pipeline state: no cost data yet
+  if (!pipelineComplete && costs.length === 0 && !loading && gateway === 'lava') {
+    return (
+      <div className="h-full flex items-center justify-center p-6">
+        <div className="text-center max-w-sm">
+          <DollarSign className="mx-auto mb-4 text-slate-600" size={48} />
+          <h2 className="text-lg font-semibold text-slate-300 mb-2">No Cost Data Yet</h2>
+          <p className="text-sm text-slate-500">Run a crisis analysis from the Dashboard tab to see AI pipeline costs and impact metrics.</p>
+        </div>
+      </div>
+    );
+  }
+
   // No Lava gateway -- show message per D-11
   if (!loading && gateway !== 'lava' && costs.length === 0) {
     return (
