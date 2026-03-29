@@ -1,11 +1,24 @@
 'use client';
+import { useEffect } from 'react';
 import { DollarSign } from 'lucide-react';
 import { useLavaCosts } from '@/hooks/useLavaCosts';
 import { CostDonut } from './CostDonut';
 import { CostSparkline } from './CostSparkline';
 
-export function UsageTab() {
-  const { costs, totalCost, gateway, loading, error } = useLavaCosts();
+interface UsageTabProps {
+  pipelineComplete?: boolean;
+}
+
+export function UsageTab({ pipelineComplete = false }: UsageTabProps) {
+  const { costs, totalCost, gateway, loading, error, refetch } = useLavaCosts();
+
+  // Refetch costs when pipeline completes (3s delay for Lava API processing)
+  useEffect(() => {
+    if (pipelineComplete) {
+      const timer = setTimeout(() => refetch(), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [pipelineComplete, refetch]);
 
   const totalRequests = costs.reduce((sum, c) => sum + c.requests, 0);
 
