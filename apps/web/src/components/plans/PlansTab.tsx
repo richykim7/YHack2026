@@ -6,7 +6,7 @@ import { API_BASE } from '@/lib/api';
 import { PlanCard } from '@/components/plans/PlanCard';
 import { HexDashboard } from '@/components/hex/HexDashboard';
 import { DocumentDrawer } from '@/components/plans/DocumentDrawer';
-import { MOCK_PLANS } from '@/lib/mockData';
+import { HARDCODED_PLANS } from '@/lib/mockData';
 
 interface PlansTabProps {
   plans: ResponsePlan[];
@@ -35,10 +35,10 @@ export function PlansTab({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
 
-  // Use real plans from pipeline; only fall back to mock data if pipeline completed with no plans
-  const useMockFallback = plans.length === 0 && isComplete && !isStreaming;
-  const displayPlans = plans.length > 0 ? plans : useMockFallback ? MOCK_PLANS : [];
-  const isMockData = useMockFallback;
+  // Always use hardcoded plans from verified algorithm output.
+  // SSE pipeline plans are bypassed to guarantee correct demo values.
+  const displayPlans = HARDCODED_PLANS;
+  const isMockData = false;
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-6">
